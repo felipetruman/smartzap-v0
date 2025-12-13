@@ -38,9 +38,9 @@ export const contactService = {
 
   getById: async (id: string): Promise<Contact | undefined> => {
     const response = await fetch(`/api/contacts/${id}`);
-    if (response.status === 404) return undefined;
     if (!response.ok) {
-      throw new Error('Falha ao buscar contato');
+      if (response.status === 404) return undefined;
+      return undefined;
     }
     return response.json();
   },

@@ -1,0 +1,256 @@
+'use client';
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Loader2, X } from 'lucide-react';
+import { toast } from 'sonner';
+
+import type { Contact, CustomFieldDefinition } from '@/types';
+import { contactService } from '@/services';
+import { customFieldService } from '@/services/customFieldService';
+
+type FocusTarget =
+  | { type: 'email' }
+  | { type: 'custom_field'; key: string }
+  | null;
+
+interface ContactQuickEditModalProps {
+  isOpen: boolean;
+  contactId: string | null;
+  onClose: () => void;
+  focus?: FocusTarget;
+  title?: string;
+}
+
+export const ContactQuickEditModal: React.FC<ContactQuickEditModalProps> = ({
+  isOpen,
+  contactId,
+  onClose,
+  focus = null,
+  title = 'Editar contato',
+}) => {
+  const queryClient = useQueryClient();
+  const emailRef = useRef<HTMLInputElement | null>(null);
+  const customRef = useRef<HTMLInputElement | null>(null);
+
+  const contactQuery = useQuery({
+    queryKey: ['contact', contactId],
+    enabled: isOpen && !!contactId,
+    queryFn: async () => {
+      const c = await contactService.getById(contactId!);
+      if (!c) throw new Error('Contato não encontrado');
+      return c;
+    },
+  });
+
+  const customFieldsQuery = useQuery({
+    queryKey: ['customFields'],
+    enabled: isOpen,
+    queryFn: () => customFieldService.getAll('contact'),
+  });
+
+  const customFields = (customFieldsQuery.data || []) as CustomFieldDefinition[];
+
+  const [form, setForm] = useState<{ name: string; email: string; custom_fields: Record<string, any> }>({
+    name: '',
+    email: '',
+    custom_fields: {},
+  });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const c = contactQuery.data;
+    if (!c) return;
+
+    setForm({
+      name: c.name || '',
+      email: c.email || '',
+      custom_fields: (c.custom_fields || {}) as Record<string, any>,
+    });
+  }, [isOpen, contactQuery.data]);
+
+  const focusLabel = useMemo(() => {
+    if (!focus) return null;
+    if (focus.type === 'email') return 'Email';
+    const field = customFields.find(f => f.key === focus.key);
+    return field?.label || focus.key;
+  }, [focus, customFields]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    // Pequeno delay para garantir que o input montou
+    const t = setTimeout(() => {
+      if (focus?.type === 'email') {
+        emailRef.current?.focus();
+        emailRef.current?.select();
+      }
+      if (focus?.type === 'custom_field') {
+        customRef.current?.focus();
+        customRef.current?.select();
+      }
+    }, 50);
+    return () => clearTimeout(t);
+  }, [isOpen, focus]);
+
+  const updateMutation = useMutation({
+    mutationFn: async (payload: { id: string; data: Partial<Omit<Contact, 'id'>> }) => {
+      const updated = await contactService.update(payload.id, payload.data);
+      if (!updated) throw new Error('Falha ao atualizar contato');
+      return updated;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      if (contactId) queryClient.invalidateQueries({ queryKey: ['contact', contactId] });
+      toast.success('Contato atualizado');
+      onClose();
+    },
+    onError: (e: any) => {
+      toast.error(e?.message || 'Falha ao atualizar contato');
+    },
+  });
+
+  if (!isOpen) return null;
+
+  const isLoading = contactQuery.isLoading || !contactQuery.data;
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-60 flex items-center justify-center p-4">
+      <div className="bg-zinc-950 border border-white/10 rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in duration-200">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h2 className="text-xl font-bold text-white">{title}</h2>
+            {focusLabel && (
+              <p className="text-xs text-gray-500 mt-1">
+                Dica: complete <span className="text-white">{focusLabel}</span> para destravar o envio.
+              </p>
+            )}
+          </div>
+          <button onClick={onClose} aria-label="Fechar" className="p-1 rounded-lg hover:bg-white/5">
+            <X className="text-gray-500 hover:text-white" />
+          </button>
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-10 text-gray-400">
+            <Loader2 className="w-5 h-5 animate-spin mr-2" />
+            Carregando contato...
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Nome</label>
+              <input
+                className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-primary-500 outline-none transition-colors"
+                value={form.name}
+                onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Ex: João Silva"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Email</label>
+              <input
+                ref={emailRef}
+                type="email"
+                className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-primary-500 outline-none transition-colors"
+                value={form.email}
+                onChange={(e) => setForm(prev => ({ ...prev, email: e.target.value }))}
+                placeholder="email@exemplo.com"
+              />
+            </div>
+
+            {focus?.type === 'custom_field' && (
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">{focusLabel}</label>
+                <input
+                  ref={customRef}
+                  className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-primary-500 outline-none transition-colors"
+                  value={String(form.custom_fields?.[focus.key] ?? '')}
+                  onChange={(e) =>
+                    setForm(prev => ({
+                      ...prev,
+                      custom_fields: { ...(prev.custom_fields || {}), [focus.key]: e.target.value },
+                    }))
+                  }
+                  placeholder={`Digite ${focusLabel}...`}
+                />
+              </div>
+            )}
+
+            <details className="pt-2 border-t border-white/10">
+              <summary className="cursor-pointer text-sm text-gray-400">Campos personalizados</summary>
+              <div className="mt-3 space-y-3">
+                {customFields.length === 0 ? (
+                  <p className="text-xs text-gray-600">Nenhum campo personalizado cadastrado.</p>
+                ) : (
+                  customFields.map(field => (
+                    <div key={field.id}>
+                      <label className="block text-xs text-gray-500 mb-1">{field.label}</label>
+                      {field.type === 'select' && field.options && field.options.length > 0 ? (
+                        <select
+                          className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:border-primary-500 outline-none transition-colors"
+                          value={String(form.custom_fields?.[field.key] ?? '')}
+                          onChange={(e) =>
+                            setForm(prev => ({
+                              ...prev,
+                              custom_fields: { ...(prev.custom_fields || {}), [field.key]: e.target.value },
+                            }))
+                          }
+                        >
+                          <option value="">Selecionar...</option>
+                          {field.options.map(opt => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
+                          className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:border-primary-500 outline-none transition-colors"
+                          value={String(form.custom_fields?.[field.key] ?? '')}
+                          onChange={(e) =>
+                            setForm(prev => ({
+                              ...prev,
+                              custom_fields: { ...(prev.custom_fields || {}), [field.key]: e.target.value },
+                            }))
+                          }
+                          placeholder={field.type === 'date' ? '' : `Digite ${field.label}...`}
+                        />
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </details>
+
+            <div className="pt-4 flex gap-3">
+              <button
+                onClick={onClose}
+                className="flex-1 bg-zinc-800 text-white font-medium py-3 rounded-xl hover:bg-zinc-700 transition-colors"
+                disabled={updateMutation.isPending}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (!contactId) return;
+                  updateMutation.mutate({
+                    id: contactId,
+                    data: {
+                      name: form.name || undefined,
+                      email: form.email || undefined,
+                      custom_fields: form.custom_fields,
+                    },
+                  });
+                }}
+                className="flex-1 bg-primary-500 text-white font-bold py-3 rounded-xl hover:bg-primary-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={updateMutation.isPending}
+              >
+                {updateMutation.isPending ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};

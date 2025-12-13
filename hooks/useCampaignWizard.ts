@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@/lib/navigation';
 import { toast } from 'sonner';
@@ -39,6 +39,7 @@ export const useCampaignWizardController = () => {
   // Pré-check (dry-run) state
   const [precheckResult, setPrecheckResult] = useState<any>(null);
   const [isPrechecking, setIsPrechecking] = useState(false);
+  const lastAutoPrecheckKeyRef = useRef<string>('');
 
   // Account Limits Hook
   const { validate, limits, isLoading: limitsLoading, tierName } = useAccountLimits();
@@ -344,13 +345,13 @@ export const useCampaignWizardController = () => {
 
   const handleBack = () => setStep((prev) => Math.max(prev - 1, 1));
 
-  const runPrecheck = async () => {
+  const runPrecheck = async (options?: { silent?: boolean; force?: boolean }) => {
     if (!selectedTemplate?.name) {
-      toast.error('Selecione um template antes de validar');
+      if (!options?.silent) toast.error('Selecione um template antes de validar');
       return;
     }
     if (!contactsForSending || contactsForSending.length === 0) {
-      toast.error('Selecione pelo menos um contato');
+      if (!options?.silent) toast.error('Selecione pelo menos um contato');
       return;
     }
 
@@ -369,15 +370,17 @@ export const useCampaignWizardController = () => {
 
       const skipped = result?.totals?.skipped ?? 0;
       const valid = result?.totals?.valid ?? 0;
-      if (skipped > 0) {
-        toast.warning(`Pré-check: ${valid} válidos, ${skipped} serão ignorados (ver detalhes)`);
-      } else {
-        toast.success(`Pré-check OK: ${valid} destinatários válidos`);
+      if (!options?.silent) {
+        if (skipped > 0) {
+          toast.warning(`Pré-check: ${valid} válidos, ${skipped} serão ignorados (ver detalhes)`);
+        } else {
+          toast.success(`Pré-check OK: ${valid} destinatários válidos`);
+        }
       }
 
       return result;
     } catch (e: any) {
-      toast.error(e?.message || 'Falha ao validar destinatários');
+      if (!options?.silent) toast.error(e?.message || 'Falha ao validar destinatários');
       return null;
     } finally {
       setIsPrechecking(false);
@@ -385,8 +388,40 @@ export const useCampaignWizardController = () => {
   };
 
   const handlePrecheck = async (): Promise<void> => {
-    await runPrecheck();
+    await runPrecheck({ silent: false, force: true });
   };
+
+  // Auto pré-check no Step 3 (debounce). Mantém UX: o usuário "bate o olho" e já vê o que está faltando.
+  const autoPrecheckKey = useMemo(() => {
+    if (!selectedTemplate?.name) return '';
+    if (!contactsForSending || contactsForSending.length === 0) return '';
+    // Evita chaves gigantes: usamos apenas contagem + variáveis.
+    const varsHash = JSON.stringify(templateVariables);
+    const contactsVersion = contactsQuery.dataUpdatedAt || 0;
+    const testContactVersion = testContactQuery.dataUpdatedAt || 0;
+    return `${selectedTemplate.name}|${contactsForSending.length}|${varsHash}|c${contactsVersion}|t${testContactVersion}`;
+  }, [
+    selectedTemplate?.name,
+    contactsForSending.length,
+    templateVariables,
+    contactsQuery.dataUpdatedAt,
+    testContactQuery.dataUpdatedAt,
+  ]);
+
+  useEffect(() => {
+    if (step !== 3) return;
+    if (!autoPrecheckKey) return;
+    if (isPrechecking) return;
+    if (createCampaignMutation.isPending) return;
+
+    const t = setTimeout(() => {
+      if (lastAutoPrecheckKeyRef.current === autoPrecheckKey) return;
+      lastAutoPrecheckKeyRef.current = autoPrecheckKey;
+      runPrecheck({ silent: true });
+    }, 650);
+
+    return () => clearTimeout(t);
+  }, [step, autoPrecheckKey, isPrechecking, createCampaignMutation.isPending]);
 
   // INTELLIGENT VALIDATION - Prevents users from sending campaigns that exceed limits
   const handleSend = async (scheduleTime?: string) => {

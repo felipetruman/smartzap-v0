@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { PrefetchLink } from '@/components/ui/PrefetchLink';
 import { ChevronLeft, Clock, CheckCircle2, Eye, AlertCircle, Download, Search, Filter, RefreshCw, Pause, Play, Calendar, Loader2, X, FileText, Ban, Pencil } from 'lucide-react';
 import { Campaign, CampaignStatus, Message, MessageStatus, Template } from '../../../types';
 import { TemplatePreviewRenderer } from '../templates/TemplatePreviewRenderer';
 import { templateService } from '../../../services';
+import { ContactQuickEditModal } from '@/components/features/contacts/ContactQuickEditModal';
+import { humanizePrecheckReason } from '@/lib/precheck-humanizer';
 
 interface DetailCardProps {
   title: string;
@@ -206,6 +208,8 @@ export const CampaignDetailsView: React.FC<CampaignDetailsViewProps> = ({
   setFilterStatus,
 }) => {
   const [showTemplatePreview, setShowTemplatePreview] = useState(false);
+  const [quickEditContactId, setQuickEditContactId] = useState<string | null>(null);
+  const [quickEditFocus, setQuickEditFocus] = useState<any>(null);
 
   if (isLoading || !campaign) return <div className="p-10 text-center text-gray-500">Carregando...</div>;
 
@@ -439,7 +443,12 @@ export const CampaignDetailsView: React.FC<CampaignDetailsViewProps> = ({
                         }`}
                       >
                         {msg.status === MessageStatus.SKIPPED ? <Ban size={10} /> : <AlertCircle size={10} />}
-                        {msg.error}
+                        {(() => {
+                          const h = humanizePrecheckReason(String(msg.error || ''));
+                          return (
+                            <span>{h.title}</span>
+                          );
+                        })()}
                       </span>
                     ) : (
                       <span className="text-gray-600 text-xs">-</span>
@@ -448,11 +457,15 @@ export const CampaignDetailsView: React.FC<CampaignDetailsViewProps> = ({
                   <td className="px-6 py-3">
                     {msg.contactId ? (
                       <button
-                        onClick={() => navigate(`/contacts?edit=${encodeURIComponent(msg.contactId!)}`)}
+                        onClick={() => {
+                          const h = msg.error ? humanizePrecheckReason(String(msg.error)) : null;
+                          setQuickEditContactId(msg.contactId!);
+                          setQuickEditFocus(h?.focus || null);
+                        }}
                         className="inline-flex items-center gap-1 text-xs text-primary-400 hover:text-primary-300 transition-colors"
-                        title="Abrir contato para edição"
+                        title="Corrigir contato sem sair da campanha"
                       >
-                        <Pencil size={12} /> Editar contato
+                        <Pencil size={12} /> Corrigir contato
                       </button>
                     ) : (
                       <span className="text-gray-600 text-xs">-</span>
@@ -474,6 +487,17 @@ export const CampaignDetailsView: React.FC<CampaignDetailsViewProps> = ({
           )}
         </div>
       </div>
+
+      <ContactQuickEditModal
+        isOpen={!!quickEditContactId}
+        contactId={quickEditContactId}
+        onClose={() => {
+          setQuickEditContactId(null);
+          setQuickEditFocus(null);
+        }}
+        focus={quickEditFocus}
+        title="Corrigir contato"
+      />
 
       {/* Template Preview Modal */}
       <TemplatePreviewModal

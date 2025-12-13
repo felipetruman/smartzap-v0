@@ -75,6 +75,26 @@ Com a planta em mãos, precisamos de um terreno para construir.
 4.  Clique em **Deploy**.
 5.  Aguarde 2-3 minutos.
 
+<details>
+  <summary><strong>📸 Ver prints do deploy na Vercel (opcional)</strong></summary>
+
+  1. **Vercel → Add New Project**
+      ![Vercel — Add New Project (print sanitizado)](./image.png)
+
+  2. **Selecione o repositório do GitHub para importar**
+      ![Vercel — selecionar repositório (print sanitizado)](./image-1.png)
+
+  3. **Clique em Deploy**
+      ![Vercel — Deploy (print sanitizado)](./image-2.png)
+
+  4. **Clique em “Continue to Dashboard”**
+      ![Vercel — Continue to Dashboard (print sanitizado)](./image-3.png)
+
+  5. **Abra “Domains” e copie a URL do projeto**
+      ![Vercel — Domains (print sanitizado)](./image-4.png)
+
+</details>
+
 **O que vai acontecer?**
 A Vercel vai "construir" sua casa. Quando terminar, você terá um link tipo:
 `https://seu-nome-smartzap.vercel.app`
@@ -203,6 +223,21 @@ Abra um bloco de notas e copie cada uma:
     > ⚠️ Este repositório está configurado para usar **apenas** o padrão novo (2025+):
     > `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (ou `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`) e `SUPABASE_SECRET_KEY`.
 
+<details>
+    <summary><strong>📸 Print de referência (opcional)</strong></summary>
+
+    > Nota: os prints abaixo são **sanitizados** (chaves e dados sensíveis ficam mascarados), mas ajudam a localizar as telas no painel.
+
+    **Supabase: API Keys**
+    ![Supabase — API keys (print sanitizado)](./image-12.png)
+
+    **(Se solicitado) Connection string: use “Transaction pooler” e inclua a senha**
+    - Clique em **Connection string** → altere o método para **Transaction pooler**
+    - Não esqueça de colocar a **senha** na URL (se precisar, use o link de reset no painel)
+    ![Supabase — Transaction pooler (print sanitizado)](./image-13.png)
+
+</details>
+
 > 💡 **O que é Supabase?** É uma alternativa open-source ao Firebase do Google. Ele oferece um banco de dados PostgreSQL completo, autenticação de usuários e storage de arquivos — tudo de graça até certo limite. O PostgreSQL é o banco de dados mais avançado do mundo (usado por empresas como Apple, Spotify e Netflix).
 >
 > A diferença entre **publishable/anon** e **secret/service_role**? A primeira é "pública" e segura para usar no navegador; a segunda é "secreta" e tem poderes administrativos (bypassa RLS) — **nunca exponha no frontend**.
@@ -233,6 +268,17 @@ Depois disso, recarregue o app.
 2.  No topo, clique em **QStash**.
 3.  Na tela do QStash, procure o bloco **Quickstart** (ele mostra um exemplo de `.env`).
 4.  Copie o valor de **`QSTASH_TOKEN`**.
+
+<details>
+    <summary><strong>📸 Onde achar no QStash (opcional)</strong></summary>
+
+    > Nota: o print do Quickstart está **sanitizado** (valores do token/keys ficam mascarados).
+
+    ![QStash — Quickstart (print sanitizado)](./image-16.png)
+
+    ![QStash — etapa no Wizard (print sanitizado)](./image-17.png)
+
+</details>
 
 > ✅ **Importante:** para este setup você **só precisa do `QSTASH_TOKEN`**.
 >
@@ -267,6 +313,17 @@ Se você quiser ver estatísticas de uso (mensagens, execuções, custo), você 
 2.  Clique em **Create** → Nome: `SmartZap` → Scope: **Full Account** → Create.
 3.  **COPIE AGORA!** Ele só aparece uma vez.
 
+<details>
+    <summary><strong>📸 Prints do token na Vercel (opcional)</strong></summary>
+
+    ![Vercel — Tokens (print sanitizado)](./image-5.png)
+    ![Vercel — Create Token (print sanitizado)](./image-6.png)
+
+    **Token criado (exemplo)**
+    ![Vercel — Token Created (print sanitizado)](./image-7.png)
+
+</details>
+
 > 💡 **Por que Full Account?** O wizard do SmartZap precisa de permissão para criar variáveis de ambiente automaticamente no seu projeto. É como dar a chave da sua casa para o encanador — ele precisa entrar para fazer o serviço. Não se preocupe: o token fica só no seu navegador durante o setup e nunca é enviado para servidores externos.
 
 ---
@@ -290,6 +347,37 @@ Agora que você tem todas as chaves no bloco de notas, vamos usá-las.
 > 🔴 **CRÍTICO:** No passo 2, o botão "Verificar e Migrar" cria as tabelas no banco. Se você não clicar, o sistema não funciona.
 
 > 💡 **O que o Wizard está fazendo?** Ele está salvando todas essas chaves como "variáveis de ambiente" no seu projeto Vercel. Variáveis de ambiente são como cofres secretos que guardam informações sensíveis fora do código. Assim, mesmo que alguém veja seu código no GitHub, não terá acesso às suas credenciais. É uma prática de segurança usada por todas as empresas de tecnologia.
+
+<details>
+  <summary><strong>📸 Prints do Wizard (opcional)</strong></summary>
+
+  1. **Projeto encontrado → confirmar**
+      ![Wizard — confirmar projeto (print sanitizado)](./image-8.png)
+
+  2. **Senha mestra**
+      ![Wizard — senha mestra (print sanitizado)](./image-9.png)
+
+  3. **Supabase (preencher dados)**
+      ![Wizard — Supabase (dados) (print sanitizado)](./image-14.png)
+
+  4. **Supabase (Connect / Verificar e Migrar)**
+      ![Wizard — Supabase (connect/migrar) (print sanitizado)](./image-10.png)
+
+  5. **Selecionar framework do app**
+      ![Wizard — framework do app (print sanitizado)](./image-11.png)
+
+  6. **Continuar**
+      ![Wizard — continuar (print sanitizado)](./image-15.png)
+
+  7. **WhatsApp Cloud API (opcional)**
+      ![Wizard — WhatsApp Cloud API (print sanitizado)](./image-20.png)
+
+  8. **Seus dados (finalização)**
+      ![Wizard — seus dados (finalização) (print sanitizado)](./image-22.png)
+
+  > Nota: todos os prints foram **sanitizados** (tokens/chaves/e-mail/telefone ficam mascarados).
+
+</details>
 
 ---
 
@@ -337,57 +425,60 @@ Entre na comunidade:
 
 As imagens abaixo ficam na pasta `docs/` e ilustram o fluxo do deploy na Vercel e o setup pelo Wizard.
 
+> ⚠️ **Nota de segurança:** os prints deste apêndice são **sanitizados** (tokens/chaves/e-mail/telefone ficam mascarados). Se você adicionar prints novos, use imagens borradas/mascaradas.
+
+### Vercel — Deploy
+
 1. **Vercel → Add New Project**
-    ![Vercel - Add New Project](./image.png)
+    ![Vercel — Add New Project (print sanitizado)](./image.png)
 
 2. **Selecione o repositório do GitHub para importar**
-    ![Vercel - selecionar repositório](./image-1.png)
+    ![Vercel — selecionar repositório (print sanitizado)](./image-1.png)
 
 3. **Clique em Deploy**
-    ![Vercel - Deploy](./image-2.png)
+    ![Vercel — Deploy (print sanitizado)](./image-2.png)
 
 4. **Clique em “Continue to Dashboard”**
-    ![Vercel - Continue to Dashboard](./image-3.png)
+    ![Vercel — Continue to Dashboard (print sanitizado)](./image-3.png)
 
 5. **Abra “Domains” e copie a URL do projeto**
-    ![Vercel - Domains](./image-4.png)
+    ![Vercel — Domains (print sanitizado)](./image-4.png)
 
-6. **Crie e copie o token da Vercel (Settings → Tokens)**
-    ![Vercel - Tokens](./image-5.png)
-    ![Vercel - Create Token](./image-6.png)
-    ![Vercel - Copiar token](./image-7.png)
+### Vercel — Token
+
+6. **Tokens / Create Token**
+    ![Vercel — Tokens (print sanitizado)](./image-5.png)
+    ![Vercel — Create Token (print sanitizado)](./image-6.png)
+    ![Vercel — Token Created (print sanitizado)](./image-7.png)
+
+### Wizard — Setup
 
 7. **Wizard: projeto detectado → confirmar**
-    ![Wizard - confirmar projeto](./image-8.png)
+    ![Wizard — confirmar projeto (print sanitizado)](./image-8.png)
 
 8. **Wizard: defina uma senha mestra segura**
-    ![Wizard - senha](./image-9.png)
+    ![Wizard — senha mestra (print sanitizado)](./image-9.png)
 
 9. **Wizard: Supabase — adicione os dados e clique em Connect / Verificar e Migrar**
-    ![Wizard - Supabase dados](./image-14.png)
-    ![Wizard - Supabase connect](./image-10.png)
+    ![Wizard — Supabase (dados) (print sanitizado)](./image-14.png)
+    ![Wizard — Supabase (connect/migrar) (print sanitizado)](./image-10.png)
 
 10. **Wizard: selecione o framework do app**
-     ![Wizard - App framework](./image-11.png)
+    ![Wizard — framework do app (print sanitizado)](./image-11.png)
 
-11. **Supabase: copie a Secret Key**
-    - Link (exemplo): https://supabase.com/dashboard/project/<PROJECT_REF>/settings/api-keys
-     ![Supabase - API keys](./image-12.png)
+11. **Clique em “Continuar” depois de inserir todos os dados**
+    ![Wizard — continuar (print sanitizado)](./image-15.png)
 
-12. **(Se solicitado) Connection string: use “Transaction pooler” e inclua a senha**
-     - Clique em **Connection string** → altere o método para **Transaction pooler**
-     - Não esqueça de colocar a **senha** na URL (se precisar, use o link de reset no painel)
-     ![Supabase - Transaction pooler](./image-13.png)
+12. **Wizard: QStash (referência da etapa)**
+    ![QStash — etapa no Wizard (print sanitizado)](./image-17.png)
 
-13. **Clique em “Continuar” depois de inserir todos os dados**
-     ![Wizard - continuar](./image-15.png)
+13. **Wizard: WhatsApp Cloud API (opcional)**
+    ![Wizard — WhatsApp Cloud API (print sanitizado)](./image-20.png)
 
-14. **Wizard: QStash — cole o `QSTASH_TOKEN`**
-     ![QStash - token (1)](./image-17.png)
-     ![QStash - token (2)](./image-16.png)
+14. **Wizard: seus dados (finalização)**
+    ![Wizard — seus dados (finalização) (print sanitizado)](./image-22.png)
 
-15. **Wizard: WhatsApp — configure ou pule esta etapa**
-     ![Wizard - WhatsApp](./image-20.png)
+### Supabase — Pooler (quando solicitado)
 
-16. **Wizard: preencha seus dados para finalizar**
-     ![Wizard - finalizar](./image-22.png)
+15. **(Se solicitado) Connection string: use “Transaction pooler” e inclua a senha**
+    ![Supabase — Transaction pooler (print sanitizado)](./image-13.png)

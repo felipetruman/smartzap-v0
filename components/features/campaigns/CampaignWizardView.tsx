@@ -42,6 +42,8 @@ import { Template, Contact, TestContact, CustomFieldDefinition } from '../../../
 import { campaignService } from '../../../services/campaignService';
 import { contactService } from '../../../services/contactService';
 import { customFieldService } from '@/services/customFieldService';
+import { ContactQuickEditModal } from '@/components/features/contacts/ContactQuickEditModal';
+import { humanizePrecheckReason, humanizeVarSource } from '@/lib/precheck-humanizer';
 import { CustomFieldsSheet } from '../contacts/CustomFieldsSheet';
 import { getPricingBreakdown } from '../../../lib/whatsapp-pricing';
 import { useExchangeRate } from '../../../hooks/useExchangeRate';
@@ -462,6 +464,9 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
   const [testContacts, setTestContacts] = useState<TestContact[]>([]);
   const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>([]);
   const [isFieldsSheetOpen, setIsFieldsSheetOpen] = useState(false);
+
+  const [quickEditContactId, setQuickEditContactId] = useState<string | null>(null);
+  const [quickEditFocus, setQuickEditFocus] = useState<any>(null);
   const [templateSearch, setTemplateSearch] = useState('');
   const [hoveredTemplateId, setHoveredTemplateId] = useState<string | null>(null);
 
@@ -513,6 +518,17 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
     }
     return selectedTemplate;
   }, [hoveredTemplateId, selectedTemplate, availableTemplates]);
+
+  const customFieldLabelByKey = useMemo(() => {
+    const entries = (customFields || []).map((f) => [f.key, f.label] as const);
+    return Object.fromEntries(entries) as Record<string, string>;
+  }, [customFields]);
+
+  const formatVarKeyForHumans = (key: string) => {
+    const n = Number(key);
+    if (Number.isFinite(n) && n > 0) return `${n}ª variável`;
+    return `variável ${key}`;
+  };
 
   type MissingParam = {
     where: 'header' | 'body' | 'button';
@@ -1538,29 +1554,29 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
                             <div>
                               <p className="text-gray-200 font-medium">Ajustes rápidos</p>
                               <p className="text-[11px] text-gray-500">
-                                Estes itens estão causando <span className="text-amber-300">skips</span> por variável sem valor. Você pode preencher aqui e clicar em <span className="text-white">Validar agora</span> de novo.
+                                A checagem roda <span className="text-white">automaticamente</span>. Se algum contato estiver sendo ignorado por falta de dado, escolha o que usar em cada variável.
                               </p>
                             </div>
                           </div>
 
                           <div className="mt-3 space-y-2">
                             {missingSummary.slice(0, 6).map((m) => {
-                              const label = m.where === 'button'
-                                ? `Botão ${Number(m.buttonIndex) + 1} • {{${m.key}}}`
-                                : `${m.where === 'header' ? 'Cabeçalho' : 'Corpo'} • {{${m.key}}}`;
+                              const rawSample = Array.from(m.rawSamples)[0] || '<vazio>';
+                              const inferred = humanizeVarSource(rawSample, customFieldLabelByKey);
+                              const whereLabel = m.where === 'button'
+                                ? `Botão ${Number(m.buttonIndex ?? 0) + 1}`
+                                : (m.where === 'header' ? 'Cabeçalho' : 'Corpo');
+                              const primary = inferred.label.startsWith('Valor') ? `Variável ${formatVarKeyForHumans(String(m.key))}` : inferred.label;
+                              const secondary = `Onde: ${whereLabel} • ${formatVarKeyForHumans(String(m.key))}`;
 
                               return (
                                 <div key={`${m.where}:${m.buttonIndex ?? ''}:${m.key}`} className="flex flex-col sm:flex-row sm:items-center gap-2 justify-between bg-zinc-900/40 border border-white/5 rounded-lg p-2">
                                   <div className="min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
-                                      <span className="text-[11px] font-bold text-gray-200 truncate">{label}</span>
+                                      <span className="text-[11px] font-bold text-gray-200 truncate">Precisa de: {primary}</span>
                                       <span className="text-[10px] text-amber-300">afetou {m.count}</span>
                                     </div>
-                                    {m.rawSamples.size > 0 && (
-                                      <p className="text-[10px] text-gray-500 truncate">
-                                        raw: {Array.from(m.rawSamples).slice(0, 2).join(' • ')}
-                                      </p>
-                                    )}
+                                    <p className="text-[10px] text-gray-500 truncate">{secondary}</p>
                                   </div>
 
                                   <div className="flex items-center gap-2 shrink-0">
@@ -1578,7 +1594,7 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
                                         <DropdownMenuLabel className="text-xs text-gray-500 uppercase tracking-wider px-2 py-1.5">
                                           Dados do Contato
                                         </DropdownMenuLabel>
-
+                          <CheckCircle size={14} /> Revalidar
                                         <DropdownMenuItem
                                           className="text-sm cursor-pointer hover:bg-zinc-800 focus:bg-zinc-800 px-2 py-1.5 rounded-sm flex items-center gap-2 outline-none"
                                           onClick={() => applyQuickFill({ where: m.where, key: m.key, buttonIndex: m.buttonIndex }, '{{nome}}')}
@@ -1660,15 +1676,29 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
                                     <tr key={`${r.phone}_${idx}`}>
                                       <td className="py-2 pr-3 text-gray-200">{r.name}</td>
                                       <td className="py-2 pr-3 font-mono text-[11px] text-gray-500">{r.normalizedPhone || r.phone}</td>
-                                      <td className="py-2 pr-3 text-amber-200/80">{r.reason || r.skipCode}</td>
+                                      <td className="py-2 pr-3">
+                                        {(() => {
+                                          const h = humanizePrecheckReason(String(r.reason || r.skipCode || ''), { customFieldLabelByKey });
+                                          return (
+                                            <div>
+                                              <p className="text-amber-200/90">{h.title}</p>
+                                            </div>
+                                          );
+                                        })()}
+                                      </td>
                                       <td className="py-2 pr-3">
                                         {r.contactId ? (
-                                          <a
-                                            href={`/contacts?edit=${encodeURIComponent(r.contactId)}`}
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const h = humanizePrecheckReason(String(r.reason || r.skipCode || ''), { customFieldLabelByKey });
+                                              setQuickEditContactId(r.contactId);
+                                              setQuickEditFocus(h.focus || null);
+                                            }}
                                             className="text-primary-400 hover:text-primary-300 underline underline-offset-2"
                                           >
-                                            Editar contato
-                                          </a>
+                                            Corrigir contato
+                                          </button>
                                         ) : (
                                           <span className="text-gray-600">-</span>
                                         )}
@@ -1686,6 +1716,17 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
                     </div>
                   )}
                 </div>
+
+                <ContactQuickEditModal
+                  isOpen={!!quickEditContactId}
+                  contactId={quickEditContactId}
+                  onClose={() => {
+                    setQuickEditContactId(null);
+                    setQuickEditFocus(null);
+                  }}
+                  focus={quickEditFocus}
+                  title="Corrigir contato"
+                />
 
                 {/* Scheduling Options */}
                 <div className="border-t border-white/5 pt-6 space-y-4">
