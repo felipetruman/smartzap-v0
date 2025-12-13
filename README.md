@@ -26,9 +26,30 @@ CRM + automação de campanhas no WhatsApp (Cloud API), com fila/workflows (Upst
 ## Navegação rápida
 
 - **Guia (produção)**: [docs/GUIA_CONFIGURACAO.md](docs/GUIA_CONFIGURACAO.md)
+- **Guia (local / dev)**: [docs/GUIA_DE_INSTALACAO.md](docs/GUIA_DE_INSTALACAO.md)
 - **Arquitetura**: [UI → API → filas → Meta → webhook → DB](#arquitetura-primeiro-como-tudo-se-conecta)
 - **Rodar local**: [Como rodar localmente](#como-rodar-localmente)
 - **Docs internas**: [Documentação interna](#documentacao-interna)
+
+> [!IMPORTANT]
+> Segurança: não comite segredos. Se você for adicionar prints na pasta `docs/`, use imagens sanitizadas (existe `scripts/redact_docs_images.py` e `scripts/scan-secrets.mjs`).
+
+## TL;DR (como começar)
+
+Escolha seu caminho:
+
+### Produção (recomendado: Vercel + Wizard)
+
+- Siga o guia completo: **[docs/GUIA_CONFIGURACAO.md](docs/GUIA_CONFIGURACAO.md)**
+- Você vai usar o Wizard em `/setup` para configurar Supabase + QStash (+ WhatsApp opcional).
+
+### Local (dev)
+
+- Siga o guia rápido: **[docs/GUIA_DE_INSTALACAO.md](docs/GUIA_DE_INSTALACAO.md)**
+- Em geral: instalar deps → `.env.local` → `npm run dev`.
+
+> [!TIP]
+> Se você for rodar o Wizard em produção, prefira o domínio principal `https://SEU-PROJETO.vercel.app` (Production) — não o link de Preview.
 
 ## O que é
 
@@ -123,7 +144,8 @@ flowchart TB
    Settings -.->|"credenciais: DB (primário) / ENV (fallback)"| Lib
 ```
 
-### Fluxo de campanha (do clique ao webhook)
+<details>
+  <summary><strong>Fluxo de campanha (do clique ao webhook)</strong></summary>
 
 ```mermaid
 sequenceDiagram
@@ -158,7 +180,10 @@ sequenceDiagram
    DB-->>UI: UI enxerga via queries/realtime
 ```
 
-### Modelo mental do banco (o que persiste)
+</details>
+
+<details>
+  <summary><strong>Modelo mental do banco (o que persiste)</strong></summary>
 
 O relacionamento que amarra tudo em campanhas é:
 
@@ -223,6 +248,8 @@ erDiagram
    }
 ```
 
+</details>
+
 ### Como navegar no código (Page → Hook → Service → API)
 
 ### Padrão de frontend (Page → Hook → Service → API)
@@ -247,6 +274,12 @@ scripts/               # Scripts utilitários (dev/ops)
 ```
 
 ## Como rodar localmente
+
+> [!TIP]
+> Quer o caminho mais curto para rodar local? Siga: **[docs/GUIA_DE_INSTALACAO.md](docs/GUIA_DE_INSTALACAO.md)**.
+
+<details>
+   <summary><strong>Ver passo a passo completo (local)</strong></summary>
 
 ### Pré-requisitos
 
@@ -286,6 +319,8 @@ npm run dev
 ```
 
 Abra `http://localhost:3000`.
+
+</details>
 
 ## Uso (fluxo recomendado)
 
