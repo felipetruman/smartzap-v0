@@ -32,6 +32,15 @@ export interface AdaptiveThrottleConfig {
   sendFloorDelayMs: number
 }
 
+export type AdaptiveThrottleConfigSource = 'db' | 'env'
+
+export interface AdaptiveThrottleConfigWithSource {
+  config: AdaptiveThrottleConfig
+  source: AdaptiveThrottleConfigSource
+  /** true quando havia algum valor no DB (mesmo que inválido/parse falhou). */
+  rawPresent: boolean
+}
+
 const KEY_PREFIX = 'whatsapp_adaptive_mps_state:'
 const CONFIG_KEY = 'whatsapp_adaptive_throttle_config'
 
@@ -133,9 +142,18 @@ function parseConfig(raw: string | null): AdaptiveThrottleConfig | null {
 }
 
 export async function getAdaptiveThrottleConfig(): Promise<AdaptiveThrottleConfig> {
+  const res = await getAdaptiveThrottleConfigWithSource()
+  return res.config
+}
+
+export async function getAdaptiveThrottleConfigWithSource(): Promise<AdaptiveThrottleConfigWithSource> {
   const raw = await settingsDb.get(CONFIG_KEY)
+  const rawPresent = typeof raw === 'string' && raw.trim().length > 0
   const parsed = parseConfig(raw)
-  return parsed || configFromEnv()
+  if (parsed) {
+    return { config: parsed, source: 'db', rawPresent }
+  }
+  return { config: configFromEnv(), source: 'env', rawPresent }
 }
 
 function isInCooldown(state: AdaptiveThrottleState, nowMs: number): boolean {

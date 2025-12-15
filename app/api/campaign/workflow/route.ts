@@ -6,7 +6,7 @@ import { getUserFriendlyMessageForMetaError, normalizeMetaErrorTextForStorage } 
 import { buildMetaTemplatePayload, precheckContactForTemplate } from '@/lib/whatsapp/template-contract'
 import { emitWorkflowTrace, maskPhone, timePhase } from '@/lib/workflow-trace'
 import { createRateLimiter } from '@/lib/rate-limiter'
-import { recordStableBatch, recordThroughputExceeded, getAdaptiveThrottleConfig, getAdaptiveThrottleState } from '@/lib/whatsapp-adaptive-throttle'
+import { recordStableBatch, recordThroughputExceeded, getAdaptiveThrottleConfigWithSource, getAdaptiveThrottleState } from '@/lib/whatsapp-adaptive-throttle'
 import { normalizePhoneNumber } from '@/lib/phone-formatter'
 import { getActiveSuppressionsByPhone } from '@/lib/phone-suppressions'
 import { maybeAutoSuppressByFailure } from '@/lib/auto-suppression'
@@ -220,8 +220,8 @@ export const { POST } = serve<CampaignWorkflowInput>(
     // Observação: cada contato faz múltiplas operações (DB + fetch Meta).
     // Para bater metas agressivas (ex.: “enviar em 1 min”), batch size precisa ser ajustável.
     // Mantemos um default conservador (10) e permitimos tuning via settings/env.
-    const cfgForBatching = await getAdaptiveThrottleConfig().catch(() => null)
-    const rawBatchSize = Number(cfgForBatching?.batchSize ?? process.env.WHATSAPP_WORKFLOW_BATCH_SIZE ?? '10')
+    const cfgForBatching = await getAdaptiveThrottleConfigWithSource().catch(() => null)
+    const rawBatchSize = Number(cfgForBatching?.config?.batchSize ?? process.env.WHATSAPP_WORKFLOW_BATCH_SIZE ?? '10')
     const BATCH_SIZE = Number.isFinite(rawBatchSize)
       ? Math.max(1, Math.min(200, Math.floor(rawBatchSize)))
       : 10
@@ -260,7 +260,8 @@ export const { POST } = serve<CampaignWorkflowInput>(
 
         // Adaptive throttle (global throughput) — state compartilhado via settings.
         // Ajuda a "pisar no acelerador" sem ficar batendo em 130429 o tempo todo.
-        const adaptiveConfig = await getAdaptiveThrottleConfig().catch(() => null)
+        const adaptiveCfg = await getAdaptiveThrottleConfigWithSource().catch(() => null)
+        const adaptiveConfig = adaptiveCfg?.config || null
         const adaptiveEnabled = Boolean(adaptiveConfig?.enabled)
         let sawThroughput429 = false
         let limiter: ReturnType<typeof createRateLimiter> | null = null
@@ -321,6 +322,10 @@ export const { POST } = serve<CampaignWorkflowInput>(
               batchSize: BATCH_SIZE,
               adaptiveEnabled,
               floorDelayMs,
+              turboConfigSource: adaptiveCfg?.source || null,
+              turboRawPresent: adaptiveCfg?.rawPresent ?? null,
+              batchingConfigSource: cfgForBatching?.source || null,
+              batchingRawPresent: cfgForBatching?.rawPresent ?? null,
             },
           })
 
@@ -955,7 +960,8 @@ export const { POST } = serve<CampaignWorkflowInput>(
 
       // Persistência best-effort do "run" (baseline / evolução).
       try {
-        const adaptiveConfig = await getAdaptiveThrottleConfig().catch(() => null)
+        const adaptiveCfg = await getAdaptiveThrottleConfigWithSource().catch(() => null)
+        const adaptiveConfig = adaptiveCfg?.config || null
         const rawConcurrency = Number(adaptiveConfig?.sendConcurrency ?? process.env.WHATSAPP_SEND_CONCURRENCY ?? '1')
         const concurrency = Number.isFinite(rawConcurrency)
           ? Math.max(1, Math.min(50, Math.floor(rawConcurrency)))
