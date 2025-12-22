@@ -827,6 +827,7 @@ export const leadFormDb = {
             slug: row.slug,
             tag: row.tag,
             isActive: !!row.is_active,
+            collectEmail: row.collect_email ?? true,
             successMessage: row.success_message ?? null,
             webhookToken: row.webhook_token ?? null,
             fields: Array.isArray(row.fields) ? row.fields : [],
@@ -850,6 +851,7 @@ export const leadFormDb = {
             slug: data.slug,
             tag: data.tag,
             isActive: !!(data as any).is_active,
+            collectEmail: (data as any).collect_email ?? true,
             successMessage: (data as any).success_message ?? null,
             webhookToken: (data as any).webhook_token ?? null,
             fields: Array.isArray((data as any).fields) ? (data as any).fields : [],
@@ -873,6 +875,7 @@ export const leadFormDb = {
             slug: data.slug,
             tag: data.tag,
             isActive: !!(data as any).is_active,
+            collectEmail: (data as any).collect_email ?? true,
             successMessage: (data as any).success_message ?? null,
             webhookToken: (data as any).webhook_token ?? null,
             fields: Array.isArray((data as any).fields) ? (data as any).fields : [],
@@ -894,6 +897,7 @@ export const leadFormDb = {
                 slug: dto.slug,
                 tag: dto.tag,
                 is_active: dto.isActive ?? true,
+                collect_email: dto.collectEmail ?? true,
                 success_message: dto.successMessage ?? null,
                 webhook_token: webhookToken,
                 fields: dto.fields || [],
@@ -909,6 +913,7 @@ export const leadFormDb = {
             slug: dto.slug,
             tag: dto.tag,
             isActive: dto.isActive ?? true,
+            collectEmail: dto.collectEmail ?? true,
             successMessage: dto.successMessage ?? null,
             webhookToken,
             fields: dto.fields || [],
@@ -924,6 +929,7 @@ export const leadFormDb = {
         if (dto.slug !== undefined) updateData.slug = dto.slug
         if (dto.tag !== undefined) updateData.tag = dto.tag
         if (dto.isActive !== undefined) updateData.is_active = dto.isActive
+        if ((dto as any).collectEmail !== undefined) updateData.collect_email = (dto as any).collectEmail
         if (dto.successMessage !== undefined) updateData.success_message = dto.successMessage
         if ((dto as any).fields !== undefined) updateData.fields = (dto as any).fields
         updateData.updated_at = new Date().toISOString()

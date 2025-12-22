@@ -7,12 +7,14 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { InternationalPhoneInput } from '@/components/ui/international-phone-input'
+import { CircleSlash } from 'lucide-react'
 
 type PublicLeadForm = {
   id: string
   name: string
   slug: string
   isActive: boolean
+  collectEmail?: boolean
   successMessage?: string | null
   fields?: Array<{
     key: string
@@ -59,12 +61,20 @@ export default function PublicLeadFormPage() {
           cache: 'no-store',
         })
 
+        const payload = await resp.json().catch(() => ({}))
+
+        // Se estiver desativado, a API retorna 403 com um payload que inclui nome/slug.
         if (!resp.ok) {
-          const payload = await resp.json().catch(() => ({}))
+          if (resp.status === 403 && payload && typeof payload === 'object' && payload.isActive === false) {
+            const data = payload as PublicLeadForm
+            if (cancelled) return
+            setForm(data)
+            return
+          }
           throw new Error(payload?.error || 'Formulário não encontrado')
         }
 
-        const data = (await resp.json()) as PublicLeadForm
+        const data = payload as PublicLeadForm
         if (cancelled) return
 
         setForm(data)
@@ -87,12 +97,19 @@ export default function PublicLeadFormPage() {
     }
   }, [slug])
 
+  // Se o form não coleta email, evita manter valor antigo no state.
+  useEffect(() => {
+    if ((form?.collectEmail ?? true) === false) {
+      setEmail('')
+    }
+  }, [form?.collectEmail])
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitError(null)
     setSuccessMessage(null)
 
-    if (!form) return
+    if (!form || form.isActive === false) return
 
     setIsSubmitting(true)
     try {
@@ -102,7 +119,7 @@ export default function PublicLeadFormPage() {
         body: JSON.stringify({
           name: name.trim(),
           phone,
-          email: email.trim() ? email.trim() : null,
+          email: (form.collectEmail ?? true) ? (email.trim() ? email.trim() : null) : null,
           custom_fields: customFields,
           website,
         }),
@@ -147,6 +164,40 @@ export default function PublicLeadFormPage() {
           </CardHeader>
 
           <CardContent>
+            {form && form.isActive === false && !loadError ? (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 rounded-lg border border-zinc-800 bg-zinc-900/40 p-2">
+                    <CircleSlash className="h-5 w-5 text-zinc-300" />
+                  </div>
+                  <div>
+                    <p className="text-base font-semibold text-zinc-100">Formulário desativado</p>
+                    <p className="mt-1 text-sm text-zinc-400">
+                      Este formulário está temporariamente indisponível. Se você recebeu este link, peça um novo link ou confirme se ele foi reativado.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-900/30 px-3 py-2">
+                  <p className="text-xs text-zinc-500">
+                    Status: <span className="text-zinc-300">Desativado</span>
+                  </p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="border-zinc-700 bg-zinc-900"
+                    onClick={() => window.location.reload()}
+                  >
+                    Atualizar status
+                  </Button>
+                </div>
+
+                <p className="mt-2 text-xs text-zinc-500">
+                  Se o formulário for reativado pelo responsável, ele volta a aparecer ao atualizar esta página.
+                </p>
+              </div>
+            ) : null}
+
             {loadError ? (
               <div className="rounded-xl border border-red-900/60 bg-red-950/40 p-4 text-sm text-red-200">
                 {loadError}
@@ -159,7 +210,7 @@ export default function PublicLeadFormPage() {
               </div>
             ) : null}
 
-            {!loadError && !successMessage ? (
+            {!loadError && !successMessage && (form?.isActive ?? true) ? (
               <form onSubmit={onSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Nome</Label>
@@ -185,17 +236,19 @@ export default function PublicLeadFormPage() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email (opcional)</Label>
-                  <Input
-                    id="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="voce@exemplo.com"
-                    className="bg-zinc-800 border-zinc-700"
-                    type="email"
-                  />
-                </div>
+                {(form?.collectEmail ?? true) ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email (opcional)</Label>
+                    <Input
+                      id="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="voce@exemplo.com"
+                      className="bg-zinc-800 border-zinc-700"
+                      type="email"
+                    />
+                  </div>
+                ) : null}
 
                 {(form?.fields || []).length > 0 ? (
                   <div className="space-y-4">

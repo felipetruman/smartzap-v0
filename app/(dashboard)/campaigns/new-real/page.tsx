@@ -12,6 +12,13 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Braces, Eye, MessageSquare, Plus, Sparkles, Users } from 'lucide-react'
 import { CustomFieldsSheet } from '@/components/features/contacts/CustomFieldsSheet'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 
 const steps = [
   { id: 1, label: 'Configuracao' },
@@ -92,7 +99,6 @@ export default function CampaignsNewRealPage() {
   const [step, setStep] = useState(1)
   const [audienceMode, setAudienceMode] = useState('todos')
   const [combineMode, setCombineMode] = useState('or')
-  const [showAdvancedSegments, setShowAdvancedSegments] = useState(false)
   const [collapseAudienceChoice, setCollapseAudienceChoice] = useState(false)
   const [collapseQuickSegments, setCollapseQuickSegments] = useState(false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -124,7 +130,8 @@ export default function CampaignsNewRealPage() {
     return `Campanha ${day} de ${month}.`
   })
   const [tagCounts, setTagCounts] = useState<Record<string, number>>({})
-  const [showAllStates, setShowAllStates] = useState(false)
+  const [showStatesPanel, setShowStatesPanel] = useState(false)
+  const [stateSearch, setStateSearch] = useState('')
 
   useEffect(() => {
     if (combineMode !== 'and') return
@@ -222,7 +229,10 @@ export default function CampaignsNewRealPage() {
     ? [configuredName || 'Contato de teste', configuredPhone].filter(Boolean).join(' - ')
     : 'Defina um telefone de teste'
 
-  const templateOptions = templatesQuery.data || []
+  const allTemplates = templatesQuery.data || []
+  const templateOptions = allTemplates.filter(
+    (template) => String(template.status || '').toUpperCase() === 'APPROVED'
+  )
   const customFields = customFieldsQuery.data || []
   const customFieldKeys = customFields.map((field) => field.key)
   const recentTemplates = useMemo(() => templateOptions.slice(0, 3), [templateOptions])
@@ -234,8 +244,10 @@ export default function CampaignsNewRealPage() {
   }, [templateOptions, templateSearch])
 
   useEffect(() => {
-    if (!selectedTemplate && templateOptions.length > 0) {
-      setSelectedTemplate(templateOptions[0])
+    if (!selectedTemplate) return
+    if (!templateOptions.some((template) => template.name === selectedTemplate.name)) {
+      setSelectedTemplate(null)
+      setTemplateSelected(false)
     }
   }, [selectedTemplate, templateOptions])
 
@@ -345,7 +357,7 @@ export default function CampaignsNewRealPage() {
   const combinePreview = combineFilters.length
     ? combineFilters.join(' • ')
     : 'Nenhum filtro selecionado'
-  const activeTemplate = previewTemplate ?? selectedTemplate ?? templateOptions[0] ?? null
+  const activeTemplate = previewTemplate ?? (templateSelected ? selectedTemplate : null)
   const resolveTemplateValue = (value: string) => {
     if (!value) return ''
     const match = value.match(/^\{\{(.+)\}\}$/)
@@ -391,8 +403,12 @@ export default function CampaignsNewRealPage() {
     return next
   }, [stateData])
   const isBrSelected = selectedCountries.includes('BR')
-  const stateChipsToShow = showAllStates ? stateChips : stateChips.slice(0, 8)
+  const stateChipsToShow = stateChips.slice(0, 3)
   const hiddenStateCount = Math.max(0, stateChips.length - stateChipsToShow.length)
+  const stateSearchTerm = stateSearch.trim().toLowerCase()
+  const filteredStates = stateData.filter((item) =>
+    stateSearchTerm ? item.code.toLowerCase().includes(stateSearchTerm) : true
+  )
   const toggleSelection = (value: string, current: string[], setCurrent: (next: string[]) => void) => {
     setCurrent(current.includes(value) ? current.filter((item) => item !== value) : [...current, value])
   }
@@ -459,34 +475,50 @@ export default function CampaignsNewRealPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        {steps.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setStep(item.id)}
-            className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition ${
-              step === item.id
-                ? 'border-emerald-400/40 bg-emerald-500/10 text-white'
-                : 'border-white/10 bg-zinc-900/40 text-gray-400 hover:text-white'
-            }`}
-          >
-            <span
-              className={`grid h-8 w-8 place-items-center rounded-full border text-xs font-semibold ${
-                step === item.id
-                  ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
-                  : 'border-white/10 text-gray-400'
-              }`}
-            >
-              {item.id}
-            </span>
-            <span className="text-xs uppercase tracking-widest">{item.label}</span>
-          </button>
-        ))}
-      </div>
-
       <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {steps.map((item) => {
+              const isStepEnabled =
+                item.id === 1 ||
+                (item.id === 2 && isConfigComplete) ||
+                (item.id === 3 && isConfigComplete && isAudienceComplete)
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  disabled={!isStepEnabled}
+                  onClick={() => {
+                    if (!isStepEnabled) return
+                    setStep(item.id)
+                  }}
+                  title={
+                    isStepEnabled
+                      ? undefined
+                      : item.id === 2
+                        ? 'Complete a configuracao para avancar'
+                        : 'Complete configuracao e publico para avancar'
+                  }
+                  className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                    step === item.id
+                      ? 'border-emerald-400/40 bg-emerald-500/10 text-white'
+                      : 'border-white/10 bg-zinc-900/40 text-gray-400'
+                  } ${!isStepEnabled ? 'cursor-not-allowed opacity-40' : 'hover:text-white'}`}
+                >
+                  <span
+                    className={`grid h-8 w-8 place-items-center rounded-full border text-xs font-semibold ${
+                      step === item.id
+                        ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
+                        : 'border-white/10 text-gray-400'
+                    }`}
+                  >
+                    {item.id}
+                  </span>
+                  <span className="text-xs uppercase tracking-widest">{item.label}</span>
+                </button>
+              )
+            })}
+          </div>
           {step === 1 && (
             <div className="space-y-6">
               <div className="rounded-2xl border border-white/10 bg-zinc-900/40 px-5 py-3 shadow-[0_10px_26px_rgba(0,0,0,0.3)]">
@@ -523,16 +555,13 @@ export default function CampaignsNewRealPage() {
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-zinc-950/40 px-4 py-2 text-sm">
                       <div className="flex items-center gap-3">
-                        <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-emerald-200">
-                          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-emerald-400/40 text-[9px] text-emerald-300">
-                            ✓
-                          </span>
-                          Selecionado
+                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-emerald-400/40 text-[10px] text-emerald-300">
+                          ✓
                         </span>
                         <div className="flex items-center gap-2">
                           <span className="text-base font-semibold text-white">{selectedTemplate?.name}</span>
                           {selectedTemplate?.category && (
-                            <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase text-gray-400">
+                            <span className="text-[10px] uppercase tracking-widest text-gray-500">
                               {selectedTemplate.category}
                             </span>
                           )}
@@ -544,9 +573,9 @@ export default function CampaignsNewRealPage() {
                           setTemplateSelected(false)
                           setPreviewTemplate(null)
                         }}
-                        className="text-xs text-gray-400 hover:text-white"
+                        className="text-xs text-emerald-400/80 hover:text-emerald-300"
                       >
-                        Trocar template
+                        Trocar
                       </button>
                     </div>
                   </div>
@@ -572,6 +601,9 @@ export default function CampaignsNewRealPage() {
                         <div className="mt-2 text-xs text-amber-300">
                           Falha ao carregar templates. Verifique as credenciais.
                         </div>
+                      )}
+                      {!templatesQuery.isLoading && !templatesQuery.isError && templateOptions.length === 0 && (
+                        <div className="mt-2 text-xs text-amber-300">Nenhum template aprovado encontrado.</div>
                       )}
                     </div>
 
@@ -960,6 +992,64 @@ export default function CampaignsNewRealPage() {
 
               {audienceMode === 'segmentos' && (
                 <div className="rounded-2xl border border-white/10 bg-zinc-900/60 p-6 shadow-[0_12px_30px_rgba(0,0,0,0.35)]">
+                  <Sheet open={showStatesPanel} onOpenChange={setShowStatesPanel}>
+                    <SheetContent className="w-full border-l border-white/10 bg-zinc-950 p-0 sm:max-w-md">
+                      <SheetHeader className="border-b border-white/10 p-6">
+                        <SheetTitle className="text-white">Selecionar UF</SheetTitle>
+                        <SheetDescription className="text-gray-400">
+                          Escolha os estados para segmentar.
+                        </SheetDescription>
+                      </SheetHeader>
+                      <div className="space-y-4 p-6">
+                        {!isBrSelected && (
+                          <div className="rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                            Selecione BR no DDI para habilitar as UFs.
+                          </div>
+                        )}
+                        <input
+                          className="w-full rounded-xl border border-white/10 bg-zinc-950/40 px-3 py-2 text-sm text-white placeholder:text-gray-600"
+                          placeholder="Buscar UF..."
+                          value={stateSearch}
+                          onChange={(event) => setStateSearch(event.target.value)}
+                        />
+                        <div className="max-h-64 overflow-y-auto pr-1">
+                          <div className="flex flex-wrap gap-2">
+                            {filteredStates.length === 0 && (
+                              <span className="text-xs text-gray-500">Nenhuma UF encontrada.</span>
+                            )}
+                            {filteredStates.map((item) => {
+                              const active = selectedStates.includes(item.code)
+                              const disabled = !isBrSelected
+                              return (
+                                <button
+                                  key={item.code}
+                                  type="button"
+                                  disabled={disabled}
+                                  aria-disabled={disabled}
+                                  onClick={() => {
+                                    if (disabled) return
+                                    if (combineMode === 'and') {
+                                      setSelectedStates(active ? [] : [item.code])
+                                      return
+                                    }
+                                    toggleSelection(item.code, selectedStates, setSelectedStates)
+                                  }}
+                                  className={`rounded-full border px-3 py-1 text-xs ${
+                                    active
+                                      ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
+                                      : 'border-white/10 bg-zinc-950/40 text-gray-300'
+                                  } ${disabled ? 'cursor-not-allowed opacity-40' : ''}`}
+                                >
+                                  <span>{item.code}</span>
+                                  <sup className="ml-1 text-[8px] leading-none text-amber-300">{item.count}</sup>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </SheetContent>
+                  </Sheet>
                   {collapseQuickSegments ? (
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                       <div>
@@ -1087,203 +1177,65 @@ export default function CampaignsNewRealPage() {
                         </div>
                         <div>
                           <p className="text-xs uppercase tracking-widest text-gray-500">UF (BR)</p>
-                          <div className="mt-3 flex items-start gap-3">
-                            <div
-                              className={`flex flex-1 gap-2 ${
-                                showAllStates ? 'flex-wrap' : 'flex-nowrap overflow-hidden'
-                              }`}
-                            >
-                              {statesQuery.isLoading && (
-                                <span className="text-xs text-gray-500">Carregando UFs...</span>
-                              )}
-                              {!statesQuery.isLoading && stateChips.length === 0 && (
-                                <span className="text-xs text-gray-500">Sem UFs cadastrados</span>
-                              )}
-                              {stateChipsToShow.map((chip) => {
-                                const active = selectedStates.includes(chip)
-                                const disabled = !isBrSelected
-                                const count = stateCounts[chip]
-                                return (
-                                  <button
-                                    key={chip}
-                                    type="button"
-                                    disabled={disabled}
-                                    aria-disabled={disabled}
-                                    onClick={() => {
-                                      if (disabled) return
-                                      if (combineMode === 'and') {
-                                        setSelectedStates(active ? [] : [chip])
-                                        return
-                                      }
-                                      toggleSelection(chip, selectedStates, setSelectedStates)
-                                    }}
-                                    className={`rounded-full border px-3 py-1 text-xs ${
-                                      active
-                                        ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
-                                        : 'border-white/10 bg-zinc-950/40 text-gray-300'
-                                    } ${disabled ? 'cursor-not-allowed opacity-40' : ''}`}
-                                  >
-                                    <span>{chip}</span>
-                                    {typeof count === 'number' && (
-                                      <sup className="ml-1 text-[8px] leading-none text-amber-300">{count}</sup>
-                                    )}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                            {!statesQuery.isLoading && hiddenStateCount > 0 && !showAllStates && (
-                              <button
-                                type="button"
-                                onClick={() => setShowAllStates(true)}
-                                className="shrink-0 text-xs text-emerald-200 hover:text-emerald-100"
-                              >
-                                +{hiddenStateCount} UFs
-                              </button>
+                          <div className="mt-3 flex items-center gap-2 overflow-hidden">
+                            {statesQuery.isLoading && (
+                              <span className="text-xs text-gray-500">Carregando UFs...</span>
                             )}
-                            {showAllStates && stateChips.length > 8 && (
+                            {!statesQuery.isLoading && stateChips.length === 0 && (
+                              <span className="text-xs text-gray-500">Sem UFs cadastrados</span>
+                            )}
+                            {stateChipsToShow.map((chip) => {
+                              const active = selectedStates.includes(chip)
+                              const disabled = !isBrSelected
+                              const count = stateCounts[chip]
+                              return (
+                                <button
+                                  key={chip}
+                                  type="button"
+                                  disabled={disabled}
+                                  aria-disabled={disabled}
+                                  onClick={() => {
+                                    if (disabled) return
+                                    if (combineMode === 'and') {
+                                      setSelectedStates(active ? [] : [chip])
+                                      return
+                                    }
+                                    toggleSelection(chip, selectedStates, setSelectedStates)
+                                  }}
+                                  className={`rounded-full border px-3 py-1 text-xs ${
+                                    active
+                                      ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
+                                      : 'border-white/10 bg-zinc-950/40 text-gray-300'
+                                  } ${disabled ? 'cursor-not-allowed opacity-40' : ''}`}
+                                >
+                                  <span>{chip}</span>
+                                  {typeof count === 'number' && (
+                                    <sup className="ml-1 text-[8px] leading-none text-amber-300">{count}</sup>
+                                  )}
+                                </button>
+                              )
+                            })}
+                            {!statesQuery.isLoading && hiddenStateCount > 0 && (
                               <button
                                 type="button"
-                                onClick={() => setShowAllStates(false)}
-                                className="shrink-0 text-xs text-gray-400 hover:text-gray-200"
+                                onClick={() => {
+                                  if (!isBrSelected) return
+                                  setStateSearch('')
+                                  setShowStatesPanel(true)
+                                }}
+                                className={`rounded-full border px-3 py-1 text-xs ${
+                                  isBrSelected
+                                    ? 'border-white/10 bg-zinc-950/40 text-gray-300 hover:border-white/30'
+                                    : 'cursor-not-allowed border-white/10 bg-zinc-950/40 text-gray-500'
+                                }`}
                               >
-                                Mostrar menos
+                                +{hiddenStateCount}
                               </button>
                             )}
                           </div>
                         </div>
-                      </div>
-                      <div className="mt-5 rounded-xl border border-white/5 bg-zinc-950/30 p-4">
-                        <p className="text-xs text-gray-400">
-                          Quer filtros avancados?{' '}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowAdvancedSegments((prev) => {
-                                const next = !prev
-                                if (next) {
-                                  setCollapseAudienceChoice(true)
-                                  setCollapseQuickSegments(true)
-                                } else {
-                                  setCollapseAudienceChoice(false)
-                                  setCollapseQuickSegments(false)
-                                }
-                                return next
-                              })
-                            }}
-                            className="text-emerald-300"
-                          >
-                            {showAdvancedSegments ? 'Fechar ajustes finos' : 'Abrir ajustes finos'}
-                          </button>
-                        </p>
                       </div>
                     </>
-                  )}
-                  {showAdvancedSegments && (
-                    <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-950/40 p-5">
-                      <div className="text-xs uppercase tracking-widest text-gray-500">Ajustes finos</div>
-                      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <label className="text-xs uppercase tracking-widest text-gray-500">Ultima interacao</label>
-                          <div className="flex flex-wrap gap-2">
-                            {['Abriu', 'Respondeu', 'Clicou'].map((label) => (
-                              <button
-                                key={label}
-                                className="rounded-full border border-white/10 bg-zinc-950/40 px-3 py-1 text-xs text-gray-300"
-                              >
-                                {label}
-                              </button>
-                            ))}
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {['7 dias', '30 dias', '90 dias'].map((label) => (
-                              <button
-                                key={label}
-                                className="rounded-full border border-white/10 bg-zinc-950/40 px-3 py-1 text-xs text-gray-300"
-                              >
-                                {label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs uppercase tracking-widest text-gray-500">Janela de inatividade</label>
-                          <div className="flex flex-wrap gap-2">
-                            {['7 dias', '30 dias', '90 dias'].map((label) => (
-                              <button
-                                key={label}
-                                className="rounded-full border border-white/10 bg-zinc-950/40 px-3 py-1 text-xs text-gray-300"
-                              >
-                                {label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <label className="text-xs uppercase tracking-widest text-gray-500">Origem do contato</label>
-                          <div className="flex flex-wrap gap-2">
-                            {[
-                              { label: 'Formulario', count: 88 },
-                              { label: 'Importacao', count: 109 },
-                              { label: 'API', count: 24 },
-                            ].map((chip) => (
-                              <button
-                                key={chip.label}
-                                className="rounded-full border border-white/10 bg-zinc-950/40 px-3 py-1 text-xs text-gray-300"
-                              >
-                                <span>{chip.label}</span>
-                                <sup className="ml-1 text-[8px] leading-none text-amber-300">{chip.count}</sup>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs uppercase tracking-widest text-gray-500">Campos personalizados</label>
-                          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                            <select className="rounded-xl border border-white/10 bg-zinc-950/40 px-3 py-2 text-xs text-white">
-                              <option value="">Selecionar campo</option>
-                              {customFields.map((field) => (
-                                <option key={field.key} value={field.key}>
-                                  {field.label || field.key}
-                                </option>
-                              ))}
-                            </select>
-                            <select className="rounded-xl border border-white/10 bg-zinc-950/40 px-3 py-2 text-xs text-white">
-                              <option>Tem valor</option>
-                              <option>Igual a</option>
-                              <option>Contem</option>
-                            </select>
-                            <input
-                              className="rounded-xl border border-white/10 bg-zinc-950/40 px-3 py-2 text-xs text-white placeholder:text-gray-600"
-                              placeholder="Valor"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-gray-400">
-                        <span className="uppercase tracking-widest text-gray-500">Excluir</span>
-                        {['Opt-out', 'Suprimidos', 'Duplicados'].map((label) => (
-                          <button
-                            key={label}
-                            className="rounded-full border border-white/10 bg-zinc-950/40 px-3 py-1 text-xs text-gray-300"
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                        <p className="text-xs text-gray-500">Ajustes aplicados ao modo de combinacao atual.</p>
-                        <div className="flex items-center gap-2">
-                          <button className="rounded-full border border-white/10 px-3 py-2 text-xs text-gray-300">
-                            Limpar tudo
-                          </button>
-                          <button className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200">
-                            Aplicar
-                          </button>
-                        </div>
-                      </div>
-                    </div>
                   )}
                 </div>
               )}
@@ -1298,7 +1250,9 @@ export default function CampaignsNewRealPage() {
                     <div className="rounded-2xl border border-white/10 bg-zinc-950/40 p-4">
                       <div className="flex items-center justify-between">
                         <label className="text-xs uppercase tracking-widest text-gray-500">Telefone de teste (settings)</label>
-                        <button className="text-xs text-emerald-300">Editar em configuracoes</button>
+                        <a href="/settings#test-contact" className="text-xs text-emerald-300">
+                          Editar em configuracoes
+                        </a>
                       </div>
                       <button
                         type="button"
@@ -1546,7 +1500,7 @@ export default function CampaignsNewRealPage() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-gray-500">Template</span>
-                <span className="text-white">{selectedTemplate?.name || '—'}</span>
+                <span className="text-white">{templateSelected ? selectedTemplate?.name || '—' : '—'}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-gray-500">Publico</span>
@@ -1568,8 +1522,17 @@ export default function CampaignsNewRealPage() {
             </div>
             <div className="mt-6 rounded-2xl bg-zinc-950/40 p-6 text-sm text-gray-300">
               <p className="text-xs uppercase tracking-widest text-gray-500">Template</p>
-              <p className="mt-2 text-base font-semibold text-white">{activeTemplate?.name}</p>
-              <p className="mt-3">{renderTemplatePreview(activeTemplate?.preview ?? '')}</p>
+              {activeTemplate ? (
+                <>
+                  <p className="mt-2 text-base font-semibold text-white">{activeTemplate.name}</p>
+                  <p className="mt-3">{renderTemplatePreview(activeTemplate.preview ?? '')}</p>
+                </>
+              ) : (
+                <>
+                  <p className="mt-2 text-base font-semibold text-white">Selecione um template</p>
+                  <p className="mt-3 text-sm text-gray-500">O preview aparece aqui quando voce escolher.</p>
+                </>
+              )}
             </div>
           </div>
         </div>

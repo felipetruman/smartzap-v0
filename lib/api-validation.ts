@@ -162,6 +162,7 @@ export const CreateLeadFormSchema = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug inválido (use letras minúsculas, números e hífen)'),
   tag: z.string().min(1, 'Tag é obrigatória').max(50, 'Tag muito longa'),
   isActive: z.boolean().optional().default(true),
+  collectEmail: z.boolean().optional().default(true),
   successMessage: z.string().max(300, 'Mensagem muito longa').optional().nullable(),
   fields: z
     .array(

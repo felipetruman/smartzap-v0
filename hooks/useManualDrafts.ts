@@ -82,7 +82,7 @@ export const useManualDraftsController = () => {
     normalizeTemplateName,
 
     createDraft: (input: { name: string; language?: string; category?: string; parameterFormat?: 'positional' | 'named' }) =>
-      createMutation.mutate({
+      createMutation.mutateAsync({
         ...input,
         name: normalizeTemplateName(input.name),
       }),

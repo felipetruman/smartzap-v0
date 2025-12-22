@@ -23,10 +23,26 @@ export async function GET(_req: Request, { params }: Params) {
     const { slug } = await params
     const form = await leadFormDb.getBySlug(slug)
 
-    if (!form || !form.isActive) {
+    if (!form) {
       return NextResponse.json(
         { error: 'Formulário não encontrado' },
         { status: 404, headers: corsHeaders() }
+      )
+    }
+
+    if (!form.isActive) {
+      return NextResponse.json(
+        {
+          error: 'Formulário desativado',
+          id: form.id,
+          name: form.name,
+          slug: form.slug,
+          isActive: false,
+          collectEmail: form.collectEmail ?? true,
+          successMessage: form.successMessage ?? null,
+          fields: form.fields ?? [],
+        },
+        { status: 403, headers: { ...corsHeaders(), 'Cache-Control': 'no-store' } }
       )
     }
 
@@ -36,6 +52,7 @@ export async function GET(_req: Request, { params }: Params) {
         name: form.name,
         slug: form.slug,
         isActive: form.isActive,
+        collectEmail: form.collectEmail ?? true,
         successMessage: form.successMessage ?? null,
         fields: form.fields ?? [],
       },

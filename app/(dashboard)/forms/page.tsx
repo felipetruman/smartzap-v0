@@ -20,6 +20,17 @@ export default function LeadFormsPage() {
       onCreate={controller.create}
       isCreating={controller.isCreating}
       createError={controller.createError}
+
+      // edit
+      isEditOpen={controller.isEditOpen}
+      editDraft={controller.editDraft}
+      setEditDraft={controller.setEditDraft}
+      onEdit={controller.openEdit}
+      onCloseEdit={controller.closeEdit}
+      onSaveEdit={controller.saveEdit}
+      isUpdating={controller.isUpdating}
+      updateError={controller.updateError}
+
       onDelete={controller.remove}
       isDeleting={controller.isDeleting}
       deleteError={controller.deleteError}

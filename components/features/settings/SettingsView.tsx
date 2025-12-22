@@ -901,7 +901,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {/* Meta App (opcional) — debug_token e diagnóstico avançado */}
         {settings.isConnected && (
-          <div className="glass-panel rounded-2xl p-8">
+          <div id="test-contact" className="glass-panel rounded-2xl p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">

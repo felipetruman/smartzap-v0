@@ -41,6 +41,20 @@ export const useLeadFormsController = () => {
     slug: '',
     tag: '',
     isActive: true,
+    collectEmail: true,
+    successMessage: 'Cadastro recebido! Obrigado.',
+    fields: [],
+  })
+
+  // Edit UI state
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState<CreateLeadFormDTO>({
+    name: '',
+    slug: '',
+    tag: '',
+    isActive: true,
+    collectEmail: true,
     successMessage: 'Cadastro recebido! Obrigado.',
     fields: [],
   })
@@ -55,6 +69,7 @@ export const useLeadFormsController = () => {
         slug: '',
         tag: '',
         isActive: true,
+        collectEmail: true,
         successMessage: 'Cadastro recebido! Obrigado.',
         fields: [],
       })
@@ -65,6 +80,10 @@ export const useLeadFormsController = () => {
     mutationFn: ({ id, dto }: { id: string; dto: UpdateLeadFormDTO }) => leadFormService.update(id, dto),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['leadForms'] })
+
+      // Se estiver editando via modal, fecha após salvar.
+      setIsEditOpen(false)
+      setEditingId(null)
     },
   })
 
@@ -97,6 +116,32 @@ export const useLeadFormsController = () => {
     create: () => createMutation.mutate(createDraft),
     isCreating: createMutation.isPending,
     createError: (createMutation.error as any)?.message as string | undefined,
+
+    // edit
+    isEditOpen,
+    editDraft,
+    setEditDraft,
+    openEdit: (form: LeadForm) => {
+      setEditingId(form.id)
+      setEditDraft({
+        name: form.name,
+        slug: form.slug,
+        tag: form.tag,
+        isActive: form.isActive,
+        collectEmail: form.collectEmail ?? true,
+        successMessage: form.successMessage ?? null,
+        fields: Array.isArray(form.fields) ? form.fields.map((f) => ({ ...f })) : [],
+      })
+      setIsEditOpen(true)
+    },
+    closeEdit: () => {
+      setIsEditOpen(false)
+      setEditingId(null)
+    },
+    saveEdit: () => {
+      if (!editingId) return
+      updateMutation.mutate({ id: editingId, dto: editDraft })
+    },
 
     // update/delete
     update: (id: string, dto: UpdateLeadFormDTO) => updateMutation.mutate({ id, dto }),

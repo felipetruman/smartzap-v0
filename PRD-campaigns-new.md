@@ -91,25 +91,38 @@ Hoje o fluxo de criacao de campanha tem excesso de scroll e baixa prioridade par
 - POST /campaigns (criar)
 - POST /campaigns/estimate (pre-check)
 
-## 10) Estados e Validacoes
+## 10) Infra (Agendamento)
+- Provisionar Upstash QStash e configurar `QSTASH_TOKEN` (prod e preview).
+- Definir URL publica para callback do QStash:
+  - Preferencia: `NEXT_PUBLIC_APP_URL`.
+  - Alternativa: `VERCEL_PROJECT_PRODUCTION_URL` ou `VERCEL_URL`.
+  - Endpoint usado: `POST /api/campaign/dispatch` (precisa ser acessivel externamente).
+- Aplicar migrations do Supabase para colunas de agendamento:
+  - `0001_initial_schema.sql` (scheduled_date).
+  - `0003_add_qstash_schedule_message_id.sql` (qstash_schedule_message_id/qstash_schedule_enqueued_at).
+- Se houver WAF/firewall, liberar chamadas do QStash para `/api/campaign/dispatch`.
+- Observabilidade: validar `GET /api/health` (qstash ok) e logs de enqueue/dispatch.
+- Local dev: agendamento roda via scheduler local (Node) apenas com `NODE_ENV=development` e dev server ativo.
+
+## 11) Estados e Validacoes
 - Template nao selecionado -> variaveis escondidas.
 - Variaveis obrigatorias vazias -> bloqueia continuar.
 - Teste selecionado sem contatos -> bloqueia continuar.
 - Agendar sem data/hora -> bloqueia lancamento.
 
-## 11) Observabilidade
+## 12) Observabilidade
 - Logar falhas de estimativa de custo e pre-check.
 - Track: tempo medio ate lancar campanha.
 
-## 12) Rollout
+## 13) Rollout
 - Feature flag por workspace.
 - Rollout gradual (10/50/100%).
 
-## 13) Riscos
+## 14) Riscos
 - Preview inconsistente se template tem midias.
 - Estimativas de custo divergentes em massa.
 
-## 14) Sucesso (KPIs)
+## 15) Sucesso (KPIs)
 - Reducao de tempo medio para lancar campanha.
 - Queda na taxa de abandono do fluxo.
 - Menos erros de variaveis obrigatorias.

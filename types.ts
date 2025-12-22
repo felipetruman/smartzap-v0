@@ -122,6 +122,7 @@ export interface LeadForm {
   slug: string;
   tag: string;
   isActive: boolean;
+  collectEmail?: boolean; // quando false, o formulário público não mostra/coleta email
   successMessage?: string | null;
   webhookToken?: string | null;
   fields?: LeadFormField[];
@@ -145,6 +146,7 @@ export interface CreateLeadFormDTO {
   slug: string;
   tag: string;
   isActive?: boolean;
+  collectEmail?: boolean;
   successMessage?: string | null;
   fields?: LeadFormField[];
 }

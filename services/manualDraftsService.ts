@@ -9,6 +9,7 @@ export type ManualDraftTemplate = {
   updatedAt: string
   parameterFormat?: 'positional' | 'named'
   spec?: unknown
+  content?: string
 }
 
 const DraftRowSchema = z.object({
@@ -20,6 +21,7 @@ const DraftRowSchema = z.object({
   updatedAt: z.string().default(''),
   parameterFormat: z.union([z.literal('positional'), z.literal('named')]).optional(),
   spec: z.unknown().optional(),
+  content: z.string().optional(),
 })
 
 function parseListResponse(raw: unknown): ManualDraftTemplate[] {

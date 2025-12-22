@@ -26,10 +26,17 @@ export async function POST(request: Request, { params }: Params) {
     const { slug } = await params
     const form = await leadFormDb.getBySlug(slug)
 
-    if (!form || !form.isActive) {
+    if (!form) {
       return NextResponse.json(
         { error: 'Formulário não encontrado' },
         { status: 404, headers: corsHeaders() }
+      )
+    }
+
+    if (!form.isActive) {
+      return NextResponse.json(
+        { error: 'Formulário desativado', isActive: false },
+        { status: 403, headers: corsHeaders() }
       )
     }
 
@@ -122,7 +129,7 @@ export async function POST(request: Request, { params }: Params) {
       {
         name,
         phone: normalized,
-        email: email ?? undefined,
+        email: (form.collectEmail ?? true) ? (email ?? undefined) : undefined,
         status: ContactStatus.OPT_IN,
         tags: [],
         custom_fields: normalizedCustomFields,
