@@ -90,7 +90,10 @@ export async function sendWhatsAppPayload(
     return {
       ok: false,
       error: errorMessage,
-      data: details ?? undefined,
+      data: {
+        details: details ?? undefined,
+        payload,
+      },
     };
   }
 
