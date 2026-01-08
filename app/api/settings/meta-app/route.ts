@@ -42,15 +42,16 @@ export async function POST(request: NextRequest) {
     const appId = String((body as any)?.appId || '').trim()
     const appSecret = String((body as any)?.appSecret || '').trim()
 
-    if (!appId || !appSecret) {
-      return NextResponse.json(
-        { error: 'appId e appSecret são obrigatórios' },
-        { status: 400 }
-      )
+    if (!appId) {
+      return NextResponse.json({ error: 'appId é obrigatório' }, { status: 400 })
     }
 
+    // Para upload (Resumable Upload API), precisamos apenas do App ID.
+    // O App Secret é opcional e só é usado em diagnósticos (/debug_token).
     await settingsDb.set('metaAppId', appId)
-    await settingsDb.set('metaAppSecret', appSecret)
+    if (appSecret) {
+      await settingsDb.set('metaAppSecret', appSecret)
+    }
 
     const cfg = await getMetaAppConfigPublic()
     return NextResponse.json({ success: true, ...cfg })

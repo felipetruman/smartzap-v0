@@ -269,6 +269,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [metaAppSecretDraft, setMetaAppSecretDraft] = useState('');
   const [isSavingMetaApp, setIsSavingMetaApp] = useState(false);
 
+  // Meta App ID (rápido) — usado para uploads do Template Builder (header_handle)
+  const [metaAppIdQuick, setMetaAppIdQuick] = useState('');
+
+  useEffect(() => {
+    setMetaAppIdQuick(metaApp?.appId || '');
+  }, [metaApp?.appId]);
+
   // Expanded URL state (to show full URL inline)
   const [expandedUrlPhoneId, setExpandedUrlPhoneId] = useState<string | null>(null);
 
@@ -834,7 +841,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 ) : limitsError ? (
                   <button
                     onClick={onRefreshLimits}
-                    className="h-10 px-3 bg-red-500/10 rounded-lg text-xs font-medium text-red-400 border border-red-500/20 flex items-center gap-1.5 hover:bg-red-500/20 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500 focus-visible:outline-offset-2"
+                    className="h-10 px-3 bg-red-500/10 rounded-lg text-xs font-medium text-red-400 border border-red-500/20 flex items-center gap-1.5 hover:bg-red-500/20 transition-colors focus-visible:outline-2 focus-visible:outline-red-500 focus-visible:outline-offset-2"
                     aria-label="Tentar buscar limites da conta novamente"
                   >
                     <AlertCircle size={12} aria-hidden="true" />
@@ -873,7 +880,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   // Toggle simples. O scroll é feito no useEffect quando vira true.
                   setIsEditing((v) => !v);
                 }}
-                className={`group relative overflow-hidden rounded-xl h-10 px-4 text-sm font-medium transition-all duration-300 flex items-center justify-center gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2
+                className={`group relative overflow-hidden rounded-xl h-10 px-4 text-sm font-medium transition-all duration-300 flex items-center justify-center gap-2 focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2
                   ${isEditing
                     ? 'bg-white text-black shadow-lg hover:bg-gray-100'
                     : 'bg-white/5 text-white hover:bg-white/10 border border-white/10 hover:border-white/20'
@@ -887,7 +894,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
               <button
                 onClick={onDisconnect}
-                className="text-xs font-medium text-red-400/60 hover:text-red-400 hover:bg-red-500/5 h-10 px-4 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500 focus-visible:outline-offset-2"
+                className="text-xs font-medium text-red-400/60 hover:text-red-400 hover:bg-red-500/5 h-10 px-4 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 focus-visible:outline-2 focus-visible:outline-red-500 focus-visible:outline-offset-2"
                 aria-label="Desconectar conta do WhatsApp"
               >
                 Desconectar
@@ -1140,6 +1147,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
                 <p className="text-xs text-gray-500 mt-2 font-mono">Armazenamento criptografado SHA-256.</p>
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Meta App ID <span className="text-gray-500">(opcional)</span>
+                </label>
+                <div className="relative group">
+                  <input
+                    type="text"
+                    value={metaAppIdQuick}
+                    onChange={(e) => setMetaAppIdQuick(e.target.value)}
+                    placeholder="ex: 123456789012345"
+                    className="w-full px-4 py-3 bg-zinc-900/50 border border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none font-mono text-sm text-white transition-all group-hover:border-white/20"
+                  />
+                  <div
+                    className="absolute right-4 top-3.5 text-gray-600 cursor-help hover:text-white transition-colors"
+                    title="Necessário para upload de mídia no header do Template Builder (Resumable Upload API)."
+                  >
+                    <HelpCircle size={16} />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Usado apenas para gerar <span className="font-mono">header_handle</span> (upload de imagem/vídeo/documento/GIF) no Template Builder.
+                </p>
+              </div>
             </div>
 
             <div className="mt-10 pt-8 border-t border-white/5 flex justify-end gap-4">
@@ -1160,6 +1191,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 onClick={() => {
                   onSave();
                   setIsEditing(false);
+
+                  // Best-effort: salva Meta App ID junto, sem bloquear o salvamento do WhatsApp.
+                  const nextAppId = metaAppIdQuick.trim();
+                  const currentAppId = String(metaApp?.appId || '').trim();
+                  if (nextAppId && nextAppId !== currentAppId) {
+                    fetch('/api/settings/meta-app', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ appId: nextAppId }),
+                    })
+                      .then(async (res) => {
+                        const json = await res.json().catch(() => ({}));
+                        if (!res.ok) throw new Error((json as any)?.error || 'Falha ao salvar Meta App ID');
+                        refreshMetaApp?.();
+                      })
+                      .catch((e) => {
+                        // Não bloqueia o fluxo principal.
+                        toast.warning(e instanceof Error ? e.message : 'Falha ao salvar Meta App ID');
+                      });
+                  }
                 }}
                 disabled={isSaving}
               >
