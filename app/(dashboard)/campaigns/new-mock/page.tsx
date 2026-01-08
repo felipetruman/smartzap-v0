@@ -129,9 +129,6 @@ export default function CampaignsNewMockPage() {
           <div className="text-xs text-gray-500">App / Campanhas / Novo</div>
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-semibold text-white">Criar Campanha</h1>
-            <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] uppercase tracking-widest text-gray-400">
-              mock redesign
-            </span>
           </div>
           <p className="text-sm text-gray-500">
             Fluxo simplificado: uma decisao por vez, com contexto sempre visivel.

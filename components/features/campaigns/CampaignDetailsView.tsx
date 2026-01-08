@@ -670,9 +670,14 @@ export const CampaignDetailsView: React.FC<CampaignDetailsViewProps> = ({
             </button>
           )}
 
-          <button className="px-4 py-2 bg-zinc-900 border border-white/10 rounded-lg text-gray-300 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2 text-sm font-medium">
+          <a
+            href={`/api/campaigns/${encodeURIComponent(campaign.id)}/report.csv`}
+            download
+            className="px-4 py-2 bg-zinc-900 border border-white/10 rounded-lg text-gray-300 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2 text-sm font-medium"
+            title="Baixar relatório em CSV"
+          >
             <Download size={16} /> Relatório CSV
-          </button>
+          </a>
         </div>
       </PageHeader>
 

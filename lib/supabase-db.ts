@@ -424,13 +424,33 @@ export const contactDb = {
         const status = (params.status || '').trim()
         const tag = (params.tag || '').trim()
 
+        const buildContactSearchOr = (raw: string) => {
+            const term = String(raw || '').trim()
+            const like = `%${term}%`
+            const digits = term.replace(/\D/g, '')
+
+            const parts = [
+                `name.ilike.${like}`,
+                `email.ilike.${like}`,
+                `phone.ilike.${like}`,
+            ]
+
+            // Ajuda quando o usuário digita telefone com espaços, parênteses, hífens etc.
+            // Como geralmente salvamos `phone` em E.164 (com +), buscar só por dígitos funciona bem.
+            if (digits && digits !== term) {
+                parts.push(`phone.ilike.%${digits}%`)
+            }
+
+            // Dedup e remove vazios
+            return Array.from(new Set(parts.map((p) => p.trim()).filter(Boolean))).join(',')
+        }
+
         let query = supabase
             .from('contacts')
             .select('*', { count: 'exact' })
 
         if (search) {
-            const like = `%${search}%`
-            query = query.or(`name.ilike.${like},phone.ilike.${like}`)
+            query = query.or(buildContactSearchOr(search))
         }
 
         if (status && status !== 'ALL' && status !== 'SUPPRESSED') {
@@ -514,13 +534,30 @@ export const contactDb = {
         const status = (params.status || '').trim()
         const tag = (params.tag || '').trim()
 
+        const buildContactSearchOr = (raw: string) => {
+            const term = String(raw || '').trim()
+            const like = `%${term}%`
+            const digits = term.replace(/\D/g, '')
+
+            const parts = [
+                `name.ilike.${like}`,
+                `email.ilike.${like}`,
+                `phone.ilike.${like}`,
+            ]
+
+            if (digits && digits !== term) {
+                parts.push(`phone.ilike.%${digits}%`)
+            }
+
+            return Array.from(new Set(parts.map((p) => p.trim()).filter(Boolean))).join(',')
+        }
+
         let query = supabase
             .from('contacts')
             .select('id')
 
         if (search) {
-            const like = `%${search}%`
-            query = query.or(`name.ilike.${like},phone.ilike.${like}`)
+            query = query.or(buildContactSearchOr(search))
         }
 
         if (status && status !== 'ALL' && status !== 'SUPPRESSED') {

@@ -16,6 +16,19 @@ type TraceListItem = {
   skippedTotal?: number | null
 }
 
+function isMissingRelationError(err: unknown): boolean {
+  const anyErr = err as any
+  const code = String(anyErr?.code || anyErr?.cause?.code || '')
+  const message = String(anyErr?.message || anyErr?.cause?.message || '')
+
+  // Postgres: 42P01 = undefined_table
+  if (code === '42P01') return true
+  // PostgREST às vezes não propaga `code` como esperamos.
+  if (/does not exist/i.test(message) && /relation|table/i.test(message)) return true
+  if (/undefined_table/i.test(message)) return true
+  return false
+}
+
 function noStoreJson(payload: unknown, init?: { status?: number }) {
   return NextResponse.json(payload, {
     status: init?.status ?? 200,
@@ -43,7 +56,7 @@ export async function GET(request: Request, { params }: Params) {
       .order('created_at', { ascending: false })
       .limit(limit)
 
-    if (runsErr) throw runsErr
+    if (runsErr && !isMissingRelationError(runsErr)) throw runsErr
 
     const out: TraceListItem[] = []
     const seen = new Set<string>()
@@ -79,7 +92,7 @@ export async function GET(request: Request, { params }: Params) {
         .order('skipped_at', { ascending: false, nullsFirst: false })
         .limit(500)
 
-      if (ccErr) throw ccErr
+      if (ccErr && !isMissingRelationError(ccErr)) throw ccErr
 
       for (const row of rows || []) {
         const traceId = String((row as any).trace_id || '').trim()

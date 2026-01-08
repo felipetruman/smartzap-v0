@@ -286,11 +286,29 @@ export default function CampaignsNewRealPage() {
   })
 
   const contactSearchResults = contactSearchQuery.data || []
+
+  const sortedContactSearchResults = useMemo(() => {
+    const getKey = (c: Contact) => {
+      const name = String(c?.name || '').trim()
+      const email = String(c?.email || '').trim()
+      const phone = String(c?.phone || '').trim()
+      return (name || email || phone || '').toLowerCase()
+    }
+
+    return [...contactSearchResults].sort((a, b) => {
+      const ka = getKey(a)
+      const kb = getKey(b)
+      const byName = ka.localeCompare(kb, 'pt-BR', { sensitivity: 'base' })
+      if (byName !== 0) return byName
+      return String(a.id).localeCompare(String(b.id), 'pt-BR')
+    })
+  }, [contactSearchResults])
+
   const displayTestContacts = useMemo(() => {
-    if (!selectedTestContact) return contactSearchResults
-    const others = contactSearchResults.filter((contact) => contact.id !== selectedTestContact.id)
+    if (!selectedTestContact) return sortedContactSearchResults
+    const others = sortedContactSearchResults.filter((contact) => contact.id !== selectedTestContact.id)
     return [selectedTestContact, ...others]
-  }, [contactSearchResults, selectedTestContact])
+  }, [sortedContactSearchResults, selectedTestContact])
 
   const configuredName = testContactQuery.data?.name?.trim() || configuredContact?.name || ''
   const configuredPhone = testContactQuery.data?.phone?.trim() || configuredContact?.phone || ''
@@ -1213,9 +1231,6 @@ export default function CampaignsNewRealPage() {
           <div className="text-xs text-gray-500">App / Campanhas / Novo</div>
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-semibold text-white">Criar Campanha</h1>
-            <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] uppercase tracking-widest text-gray-400">
-              mock redesign
-            </span>
           </div>
           <p className="text-sm text-gray-500">
             Fluxo simplificado: uma decisao por vez, com contexto sempre visivel.
