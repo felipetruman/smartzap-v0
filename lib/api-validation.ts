@@ -70,9 +70,10 @@ export const CreateCampaignSchema = z.object({
   selectedContactIds: z.array(z.string()).optional(),
   templateVariables: z.object({
     header: z.array(z.string()),
+    headerMediaId: z.string().optional(),
     body: z.array(z.string()),
     buttons: z.record(z.string(), z.string()).optional()
-  }).optional(), // Meta API structure: { header: string[], body: string[], buttons?: Record<string, string> }
+  }).optional(), // Meta API structure: { header: string[], headerMediaId?: string, body: string[], buttons?: Record<string, string> }
   contacts: z.array(
     z.object({
       id: z.string().optional(),

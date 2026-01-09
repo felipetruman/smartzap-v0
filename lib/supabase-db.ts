@@ -73,7 +73,7 @@ export const campaignDb = {
             name: row.name,
             status: row.status as CampaignStatus,
             templateName: row.template_name,
-            templateVariables: row.template_variables as { header: string[], body: string[], buttons?: Record<string, string> } | undefined,
+            templateVariables: row.template_variables as { header: string[], headerMediaId?: string, body: string[], buttons?: Record<string, string> } | undefined,
             templateSnapshot: (row as any).template_snapshot ?? undefined,
             templateSpecHash: (row as any).template_spec_hash ?? null,
             templateParameterFormat: (row as any).template_parameter_format ?? null,
@@ -135,7 +135,7 @@ export const campaignDb = {
                 name: row.name,
                 status: row.status as CampaignStatus,
                 templateName: row.template_name,
-                templateVariables: row.template_variables as { header: string[], body: string[], buttons?: Record<string, string> } | undefined,
+                templateVariables: row.template_variables as { header: string[], headerMediaId?: string, body: string[], buttons?: Record<string, string> } | undefined,
                 recipients: row.total_recipients,
                 sent: row.sent,
                 delivered: row.delivered,
@@ -167,7 +167,7 @@ export const campaignDb = {
             name: data.name,
             status: data.status as CampaignStatus,
             templateName: data.template_name,
-            templateVariables: data.template_variables as { header: string[], body: string[], buttons?: Record<string, string> } | undefined,
+            templateVariables: data.template_variables as { header: string[], headerMediaId?: string, body: string[], buttons?: Record<string, string> } | undefined,
             templateSnapshot: (data as any).template_snapshot ?? undefined,
             templateSpecHash: (data as any).template_spec_hash ?? null,
             templateParameterFormat: (data as any).template_parameter_format ?? null,
@@ -195,7 +195,7 @@ export const campaignDb = {
         templateName: string
         recipients: number
         scheduledAt?: string
-        templateVariables?: { header: string[], body: string[], buttons?: Record<string, string> }
+        templateVariables?: { header: string[], headerMediaId?: string, body: string[], buttons?: Record<string, string> }
     }): Promise<Campaign> => {
         const id = generateId()
         const now = new Date().toISOString()
@@ -1312,6 +1312,8 @@ export const templateDb = {
                 parameterFormat: normalizeParameterFormat((row as any).parameter_format),
                 specHash: (row as any).spec_hash ?? null,
                 fetchedAt: (row as any).fetched_at ?? null,
+                headerMediaId: (row as any).header_media_id ?? null,
+                headerMediaHash: (row as any).header_media_hash ?? null,
                 content: bodyText,
                 preview: bodyText,
                 lastUpdated: row.updated_at || row.created_at,
@@ -1340,6 +1342,8 @@ export const templateDb = {
             parameterFormat: normalizeParameterFormat((data as any).parameter_format),
             specHash: (data as any).spec_hash ?? null,
             fetchedAt: (data as any).fetched_at ?? null,
+            headerMediaId: (data as any).header_media_id ?? null,
+            headerMediaHash: (data as any).header_media_hash ?? null,
             content: bodyText,
             preview: bodyText,
             lastUpdated: data.updated_at || data.created_at,

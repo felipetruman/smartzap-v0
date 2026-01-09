@@ -44,6 +44,8 @@ export interface Template {
   parameterFormat?: 'positional' | 'named';
   specHash?: string | null;
   fetchedAt?: string | null;
+  headerMediaId?: string | null;
+  headerMediaHash?: string | null;
   components?: TemplateComponent[]; // Full components from Meta API
 }
 

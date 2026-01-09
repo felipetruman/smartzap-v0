@@ -13,12 +13,14 @@ export type SkipCode =
 
 export type TemplateVariablesPositional = {
   header?: string[]
+  headerMediaId?: string
   body: string[]
   buttons?: Record<string, string>
 }
 
 export type TemplateVariablesNamed = {
   header?: Record<string, string>
+  headerMediaId?: string
   body: Record<string, string>
   buttons?: Record<string, string>
 }
@@ -70,6 +72,7 @@ export interface ContactLike {
 
 export interface ResolvedTemplateValues {
   header?: Array<{ key: string; text: string }>
+  headerMediaId?: string
   body: Array<{ key: string; text: string }>
   buttons?: Array<{ index: number; params: Array<{ key: string; text: string }> }>
 }
@@ -357,6 +360,9 @@ export function precheckContactForTemplate(
     const headerArr = normalizePositionalArrayOrMap((rawTemplateVariables as any)?.header)
     const bodyArr = normalizePositionalArrayOrMap((rawTemplateVariables as any)?.body)
     const buttons = ((rawTemplateVariables as any)?.buttons || {}) as Record<string, string>
+    const headerMediaId =
+      ((rawTemplateVariables as any)?.headerMediaId as string | undefined) ||
+      ((rawTemplateVariables as any)?.header_media_id as string | undefined)
 
     if (spec.header?.requiredKeys.length) {
       const key = spec.header.requiredKeys[0] // only one
@@ -393,10 +399,14 @@ export function precheckContactForTemplate(
       buttonValues.push({ index: b.index, params })
     }
     if (buttonValues.length) values.buttons = buttonValues
+    if (headerMediaId && headerMediaId.trim()) values.headerMediaId = headerMediaId.trim()
   } else {
     // named
     const headerMap = normalizeNamedMap((rawTemplateVariables as any)?.header)
     const bodyMap = normalizeNamedMap((rawTemplateVariables as any)?.body)
+    const headerMediaId =
+      ((rawTemplateVariables as any)?.headerMediaId as string | undefined) ||
+      ((rawTemplateVariables as any)?.header_media_id as string | undefined)
 
     if (spec.header?.requiredKeys.length) {
       const key = spec.header.requiredKeys[0]
@@ -414,6 +424,7 @@ export function precheckContactForTemplate(
     })
 
     // buttons dynamic is forbidden for named, so nothing to resolve
+    if (headerMediaId && headerMediaId.trim()) values.headerMediaId = headerMediaId.trim()
   }
 
   const missingDetails: MissingParamDetail[] = requiredParams
@@ -559,8 +570,10 @@ export function buildMetaTemplatePayload(input: {
   // Se não houver fonte (link/id), é melhor falhar de forma explícita do que enviar payload inválido
   // e estourar erro na Meta (#132012 expected IMAGE received UNKNOWN).
   if (headerIsMedia) {
+    const headerMediaId = values.headerMediaId?.trim()
     const exampleLink = extractHeaderExampleLink()
-    if (!exampleLink || !/^https?:\/\//i.test(exampleLink)) {
+    const hasLink = Boolean(exampleLink && /^https?:\/\//i.test(exampleLink))
+    if (!headerMediaId && !hasLink) {
       throw new Error(
         `Template "${templateName}" possui HEADER ${headerFormat}, mas não há mídia configurada para envio. ` +
           'Dica: sincronize os templates (para obter URL de exemplo) ou implemente suporte a mídia de header no disparo.'
@@ -572,10 +585,15 @@ export function buildMetaTemplatePayload(input: {
     payload.template.components.push({
       type: 'header',
       parameters: [
-        {
-          type: mediaParamType,
-          [mediaKey]: { link: exampleLink },
-        },
+        headerMediaId
+          ? {
+              type: mediaParamType,
+              [mediaKey]: { id: headerMediaId },
+            }
+          : {
+              type: mediaParamType,
+              [mediaKey]: { link: exampleLink },
+            },
       ],
     })
   }

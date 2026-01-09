@@ -41,7 +41,7 @@ export async function getCampaignsServer(params?: {
             name: row.name,
             status: row.status as CampaignStatus,
             templateName: row.template_name,
-            templateVariables: row.template_variables as { header: string[], body: string[], buttons?: Record<string, string> } | undefined,
+            templateVariables: row.template_variables as { header: string[], headerMediaId?: string, body: string[], buttons?: Record<string, string> } | undefined,
             recipients: row.total_recipients,
             sent: row.sent,
             delivered: row.delivered,

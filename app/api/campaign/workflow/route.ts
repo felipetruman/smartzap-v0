@@ -276,7 +276,7 @@ interface CampaignWorkflowInput {
   traceId?: string
   templateName: string
   contacts: Contact[]
-  templateVariables?: { header: string[], body: string[], buttons?: Record<string, string> }  // Meta API structure
+  templateVariables?: { header: string[], headerMediaId?: string, body: string[], buttons?: Record<string, string> }  // Meta API structure
   templateSnapshot?: {
     name: string
     language?: string
@@ -675,6 +675,115 @@ export const { POST } = serve<CampaignWorkflowInput>(
 
           let hostedHeaderMediaForBatch: HostedHeaderMediaResult | null = null
           let hostPromise: Promise<HostedHeaderMediaResult | null> | null = null
+          let headerMediaIdForBatch: string | null = null
+          let headerMediaIdPromise: Promise<string | null> | null = null
+
+          const hashHeaderMediaSource = (value: string): string => {
+            return createHash('sha256').update(value).digest('hex').slice(0, 32)
+          }
+
+          const uploadMediaToMeta = async (params: {
+            phoneNumberId: string
+            accessToken: string
+            buffer: Buffer
+            contentType?: string
+            filename: string
+          }): Promise<{ ok: boolean; status: number; id?: string; error?: string }> => {
+            try {
+              const form = new FormData()
+              const contentType = params.contentType || 'application/octet-stream'
+              form.append('messaging_product', 'whatsapp')
+              form.append('type', contentType)
+              form.append('file', new Blob([params.buffer], { type: contentType }), params.filename)
+
+              const res = await fetch(`https://graph.facebook.com/v24.0/${params.phoneNumberId}/media`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${params.accessToken}` },
+                body: form,
+              })
+              const body = await safeJson<any>(res)
+              if (!res.ok) {
+                return {
+                  ok: false,
+                  status: res.status,
+                  error: body?.error?.message || `HTTP ${res.status}`,
+                }
+              }
+              const id = String(body?.id || '').trim()
+              if (!id) {
+                return { ok: false, status: res.status, error: 'Resposta sem media_id' }
+              }
+              return { ok: true, status: res.status, id }
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : String(e)
+              return { ok: false, status: 0, error: msg }
+            }
+          }
+
+          const ensureHeaderMediaIdForBatch = async (templateCandidate?: any): Promise<string | null> => {
+            if (headerMediaIdForBatch) return headerMediaIdForBatch
+            if (headerMediaIdPromise) return await headerMediaIdPromise
+
+            headerMediaIdPromise = (async () => {
+              try {
+                const active = templateCandidate || refreshedTemplateForBatch || templateForBatch || initialTemplate
+                const headerInfo = getTemplateHeaderMediaExampleLink(active)
+                const example = headerInfo.example
+                if (!example || !isHttpUrl(example)) return null
+                const exampleHash = hashHeaderMediaSource(example)
+
+                const cachedId = (active as any)?.headerMediaId as string | null | undefined
+                const cachedHash = (active as any)?.headerMediaHash as string | null | undefined
+                if (cachedId && cachedHash && cachedHash === exampleHash) {
+                  headerMediaIdForBatch = cachedId
+                  return headerMediaIdForBatch
+                }
+
+                const maxBytes = Number(process.env.MEDIA_REHOST_MAX_BYTES || String(25 * 1024 * 1024))
+                const downloaded = await tryDownloadBinary(example, accessToken)
+                if (!downloaded.ok || !downloaded.buffer) return null
+                if (typeof downloaded.size === 'number' && downloaded.size > maxBytes) return null
+
+                const contentType = downloaded.contentType || 'application/octet-stream'
+                const ext = guessExtFromContentType(contentType)
+                const safeName = String(templateName || 'template').replace(/[^a-zA-Z0-9_\-]/g, '_')
+                const filename = `${safeName}.${ext}`
+
+                const up = await uploadMediaToMeta({
+                  phoneNumberId,
+                  accessToken,
+                  buffer: downloaded.buffer,
+                  contentType,
+                  filename,
+                })
+                if (!up.ok || !up.id) return null
+                headerMediaIdForBatch = up.id
+
+                // Cache persistente: evita reupload em próximos disparos.
+                try {
+                  await supabase
+                    .from('templates')
+                    .update({
+                      header_media_id: up.id,
+                      header_media_hash: exampleHash,
+                      header_media_updated_at: new Date().toISOString(),
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq('name', templateName)
+                } catch (e) {
+                  console.warn('[Workflow] Falha ao persistir header_media_id (best-effort):', e)
+                }
+
+                return headerMediaIdForBatch
+              } catch (e) {
+                console.warn('[Workflow] Falha ao gerar media_id do header (best-effort):', e)
+                return null
+              }
+            })()
+
+            const out = await headerMediaIdPromise
+            return out
+          }
 
           const ensureRefreshedTemplateForBatch = async (): Promise<any | null> => {
             if (refreshedTemplateForBatch) return refreshedTemplateForBatch
@@ -844,6 +953,8 @@ export const { POST } = serve<CampaignWorkflowInput>(
             const alwaysRehostEnabled = process.env.ALWAYS_REHOST_TEMPLATE_MEDIA === '1'
             const exampleIsHttp = Boolean(examplePre && isHttpUrl(String(examplePre)))
             const exampleHost = examplePre ? getUrlHost(String(examplePre)) : null
+            const templateVarsHeaderMediaId =
+              (templateVariables as any)?.headerMediaId || (templateVariables as any)?.header_media_id
 
             // Observabilidade: quando o rehost preventivo está habilitado, queremos entender
             // por que ele rodou (ou não) em produção.
@@ -918,6 +1029,49 @@ export const { POST } = serve<CampaignWorkflowInput>(
                   ok: true,
                   extra: {
                     reason: 'rehost_failed_or_unavailable',
+                  },
+                })
+              }
+            }
+
+            // PREVENTIVO: gerar media_id automaticamente (invisível ao usuário) quando não fornecido.
+            if (headerIsMediaPre && exampleIsHttp && !templateVarsHeaderMediaId) {
+              await emitWorkflowTrace({
+                traceId,
+                campaignId,
+                step,
+                batchIndex,
+                phase: 'template_media_id_prepare_start',
+                ok: true,
+                extra: {
+                  headerFormat: headerInfoPre.format || null,
+                  exampleHost,
+                },
+              })
+
+              const mediaId = await ensureHeaderMediaIdForBatch(templateForBatch)
+              if (mediaId) {
+                await emitWorkflowTrace({
+                  traceId,
+                  campaignId,
+                  step,
+                  batchIndex,
+                  phase: 'template_media_id_prepare_ok',
+                  ok: true,
+                  extra: {
+                    mediaIdPrefix: mediaId.slice(0, 8),
+                  },
+                })
+              } else {
+                await emitWorkflowTrace({
+                  traceId,
+                  campaignId,
+                  step,
+                  batchIndex,
+                  phase: 'template_media_id_prepare_skip',
+                  ok: true,
+                  extra: {
+                    reason: 'media_id_unavailable',
                   },
                 })
               }
@@ -1236,6 +1390,10 @@ export const { POST } = serve<CampaignWorkflowInput>(
             }
 
             // Claim foi feito em bulk no início do batch.
+            const valuesForSend =
+              headerMediaIdForBatch && !precheck.values.headerMediaId
+                ? { ...precheck.values, headerMediaId: headerMediaIdForBatch }
+                : precheck.values
 
             let whatsappPayload: any
             try {
@@ -1245,7 +1403,7 @@ export const { POST } = serve<CampaignWorkflowInput>(
                 templateName,
                 language: (activeTemplate as any).language || 'pt_BR',
                 parameterFormat: (activeTemplate as any).parameter_format || (activeTemplate as any).parameterFormat || 'positional',
-                values: precheck.values,
+                values: valuesForSend,
                 template: activeTemplate as any,
               })
             } catch (e) {
@@ -1420,7 +1578,7 @@ export const { POST } = serve<CampaignWorkflowInput>(
                       language: (activeTemplate1 as any).language || 'pt_BR',
                       parameterFormat:
                         (activeTemplate1 as any).parameter_format || (activeTemplate1 as any).parameterFormat || 'positional',
-                      values: precheck.values,
+                      values: valuesForSend,
                       template: activeTemplate1 as any,
                     })
 
@@ -1552,7 +1710,7 @@ export const { POST } = serve<CampaignWorkflowInput>(
                       language: (patched as any).language || 'pt_BR',
                       parameterFormat:
                         (patched as any).parameter_format || (patched as any).parameterFormat || 'positional',
-                      values: precheck.values,
+                      values: valuesForSend,
                       template: patched as any,
                     })
 
