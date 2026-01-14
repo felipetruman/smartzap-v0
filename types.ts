@@ -351,7 +351,8 @@ export type RealtimeTable =
   | 'custom_field_definitions'
   | 'account_alerts'
   | 'template_projects'
-  | 'template_project_items';
+  | 'template_project_items'
+  | 'flow_submissions';
 
 /**
  * Event types for Realtime subscriptions
