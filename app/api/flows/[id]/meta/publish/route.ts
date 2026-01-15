@@ -94,10 +94,11 @@ function extractFlowJson(row: any): unknown {
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
+  let wantsDebug = false
 
   try {
     const input = PublishSchema.parse(await req.json().catch(() => ({})))
-    const wantsDebug = req.headers.get('x-debug-client') === '1'
+    wantsDebug = req.headers.get('x-debug-client') === '1'
 
     const credentials = await getWhatsAppCredentials()
     if (!credentials?.accessToken || !credentials.businessAccountId) {

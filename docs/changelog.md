@@ -38,6 +38,9 @@
   - `app/api/flows/[id]/meta/publish/route.ts` retorna detalhes da Meta com `x-debug-client=1`
   - `services/flowsService.ts` envia o header e registra o erro localmente
 
+- **🔧 Build corrigido no publish**
+  - Ajuste de escopo em `app/api/flows/[id]/meta/publish/route.ts` para `wantsDebug`
+
 ## 25/12/2025 - Debug (Run/Trace para campanhas)
 
 - **🔎 Timeline estruturada por `trace_id` (sem caçar logs)**
