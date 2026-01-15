@@ -105,8 +105,9 @@ function parseTimeToMinutes(value: string): number {
 /**
  * Gera lista de datas disponiveis (proximos N dias uteis)
  * 
- * IMPORTANTE: Trabalha apenas com strings de data (yyyy-MM-dd) para evitar
- * problemas de timezone. O servidor Vercel roda em UTC.
+ * IMPORTANTE: Usa UTC Date para evitar problemas de timezone do servidor.
+ * O servidor Vercel roda em UTC, então criamos datas em UTC e formatamos
+ * usando o timezone do cliente.
  */
 async function getAvailableDates(daysToShow: number = 14): Promise<Array<{ id: string; title: string }>> {
   const config = await getCalendarBookingConfig()
@@ -114,6 +115,7 @@ async function getAvailableDates(daysToShow: number = 14): Promise<Array<{ id: s
   
   // Pega a data atual no timezone correto (ex: America/Sao_Paulo)
   const todayStr = formatInTimeZone(new Date(), timeZone, 'yyyy-MM-dd')
+  const [year, month, day] = todayStr.split('-').map(Number)
   
   // Debug: log config
   const enabledDays = config.workingHours.filter(d => d.enabled).map(d => d.day)
@@ -131,14 +133,12 @@ async function getAvailableDates(daysToShow: number = 14): Promise<Array<{ id: s
   const maxAttempts = 60
 
   while (dates.length < daysToShow && dayOffset < maxAttempts) {
-    // Calcula a data adicionando dias à data atual
-    // Usa fromZonedTime para criar uma data no timezone correto
-    const [year, month, day] = todayStr.split('-').map(Number)
-    const baseDate = new Date(year, month - 1, day + dayOffset)
-    const dateStr = format(baseDate, 'yyyy-MM-dd')
+    // Cria data em UTC para evitar problemas de timezone
+    const utcDate = new Date(Date.UTC(year, month - 1, day + dayOffset, 12, 0, 0))
+    const dateStr = utcDate.toISOString().split('T')[0]
     
-    // Calcula o dia da semana (0=Dom, 1=Seg, ..., 6=Sab)
-    const jsDay = baseDate.getDay()
+    // Calcula o dia da semana em UTC (0=Dom, 1=Seg, ..., 6=Sab)
+    const jsDay = utcDate.getUTCDay()
     // Converte para ISO (1=Mon, 7=Sun)
     const isoDay = jsDay === 0 ? 7 : jsDay
     const dayKey = WEEKDAY_KEYS[isoDay - 1]
@@ -158,8 +158,8 @@ async function getAvailableDates(daysToShow: number = 14): Promise<Array<{ id: s
     }
     
     if (isWorking) {
-      // Formata o display
-      const displayStr = format(baseDate, "EEEE, d 'de' MMM", { locale: ptBR })
+      // Formata o display usando formatInTimeZone para garantir consistência
+      const displayStr = formatInTimeZone(utcDate, timeZone, "EEEE, d 'de' MMM", { locale: ptBR })
       dates.push({
         id: dateStr,
         title: displayStr.charAt(0).toUpperCase() + displayStr.slice(1),
