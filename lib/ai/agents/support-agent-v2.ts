@@ -174,89 +174,69 @@ export async function processSupportAgentV2(
 
   let response: SupportResponse | undefined
   let error: string | null = null
-  let knowledgeContext = ''
 
   try {
-    // =======================================================================
-    // STEP 1: If has knowledge base, get context with file_search
-    // =======================================================================
     if (hasKnowledgeBase && agent.file_search_store_id) {
-      console.log(`[support-agent] Step 1: Searching knowledge base...`)
+      // =======================================================================
+      // WITH KNOWLEDGE BASE: Use file_search (returns plain text)
+      // =======================================================================
+      console.log(`[support-agent] Using File Search with store: ${agent.file_search_store_id}`)
 
-      try {
-        const searchResult = await generateText({
-          model,
-          system: 'Você é um assistente que busca informações relevantes na base de conhecimento.',
-          messages: aiMessages,
-          tools: {
-            file_search: google.tools.fileSearch({
-              fileSearchStoreNames: [agent.file_search_store_id],
-              topK: 5,
-            }),
-          },
-          temperature: 0.3,
-          maxOutputTokens: 1024,
-        })
+      const result = await generateText({
+        model,
+        system: agent.system_prompt,
+        messages: aiMessages,
+        tools: {
+          file_search: google.tools.fileSearch({
+            fileSearchStoreNames: [agent.file_search_store_id],
+            topK: 5,
+          }),
+        },
+        temperature: DEFAULT_TEMPERATURE,
+        maxOutputTokens: DEFAULT_MAX_TOKENS,
+      })
 
-        // Extract the response text as context
-        if (searchResult.text) {
-          knowledgeContext = searchResult.text
-          console.log(`[support-agent] Found context: ${knowledgeContext.length} chars`)
-        }
-      } catch (searchErr) {
-        console.error('[support-agent] File search failed:', searchErr)
-        // Continue without knowledge context
+      // Create structured response from plain text
+      response = {
+        message: result.text || 'Desculpe, não consegui gerar uma resposta.',
+        sentiment: 'neutral',
+        confidence: 0.8,
+        shouldHandoff: false,
       }
+
+      console.log(`[support-agent] File Search response: ${response.message.slice(0, 100)}...`)
+
+    } else {
+      // =======================================================================
+      // WITHOUT KNOWLEDGE BASE: Use respond tool for structured output
+      // =======================================================================
+      console.log(`[support-agent] Using respond tool (no knowledge base)`)
+
+      const respondTool = tool({
+        description: 'Envia uma resposta estruturada ao usuário.',
+        inputSchema: supportResponseSchema,
+        execute: async (params) => {
+          response = params
+          return params
+        },
+      })
+
+      await generateText({
+        model,
+        system: agent.system_prompt,
+        messages: aiMessages,
+        tools: { respond: respondTool },
+        toolChoice: 'required',
+        temperature: DEFAULT_TEMPERATURE,
+        maxOutputTokens: DEFAULT_MAX_TOKENS,
+      })
+
+      if (!response) {
+        throw new Error('No response generated')
+      }
+
+      console.log(`[support-agent] Respond tool response: ${response.message.slice(0, 100)}...`)
     }
-
-    // =======================================================================
-    // STEP 2: Generate structured response with respond tool
-    // =======================================================================
-    console.log(`[support-agent] Step 2: Generating response...`)
-
-    // Build system prompt
-    let systemPrompt = agent.system_prompt
-
-    if (knowledgeContext) {
-      systemPrompt += `
-
-CONTEXTO DA BASE DE CONHECIMENTO:
-${knowledgeContext}
-
-Use as informações acima para responder ao cliente quando relevante.`
-    }
-
-    systemPrompt += `
-
-INSTRUÇÕES:
-- Responda em português do Brasil
-- Seja educado e profissional
-- Use a ferramenta "respond" para enviar sua resposta`
-
-    const respondTool = tool({
-      description: 'Envia uma resposta estruturada ao usuário. SEMPRE use esta ferramenta.',
-      inputSchema: supportResponseSchema,
-      execute: async (params) => {
-        response = params
-        return params
-      },
-    })
-
-    await generateText({
-      model,
-      system: systemPrompt,
-      messages: aiMessages,
-      tools: { respond: respondTool },
-      toolChoice: 'required',
-      temperature: DEFAULT_TEMPERATURE,
-      maxOutputTokens: DEFAULT_MAX_TOKENS,
-    })
-
-    if (!response) {
-      throw new Error('No response generated')
-    }
-
-    console.log(`[support-agent] Response generated: ${response.message.slice(0, 100)}...`)
 
   } catch (err) {
     error = err instanceof Error ? err.message : 'Unknown error'

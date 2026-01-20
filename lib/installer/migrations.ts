@@ -1,6 +1,6 @@
 /**
  * Executor de migrations para o installer.
- * Baseado no CRM que funciona.
+ * COPIADO DO CRM QUE FUNCIONA - adaptado para múltiplos arquivos.
  */
 
 import fs from 'fs';
@@ -14,6 +14,7 @@ function needsSsl(connectionString: string) {
 }
 
 function stripSslModeParam(connectionString: string) {
+  // Some drivers/envs treat `sslmode=require` inconsistently. We control SSL via `Client({ ssl })`.
   try {
     const url = new URL(connectionString);
     url.searchParams.delete('sslmode');
@@ -40,6 +41,7 @@ function isRetryableConnectError(err: unknown): boolean {
 
 /**
  * Conecta com retry/backoff, recriando o Client a cada tentativa.
+ * Isso evita o erro: "Client has already been connected. You cannot reuse a client."
  */
 async function connectClientWithRetry(
   createClient: () => Client,
@@ -95,104 +97,57 @@ function listMigrationFiles(): string[] {
   }
 }
 
-export interface MigrationProgress {
-  stage: 'connecting' | 'applying' | 'done';
-  message: string;
-  current?: number;
-  total?: number;
-}
-
-export interface MigrationOptions {
-  skipWaitStorage?: boolean; // Mantido por compatibilidade, mas ignorado
-  onProgress?: (progress: MigrationProgress) => void;
-}
-
 /**
- * Executa todas as migrations em ordem.
+ * Função pública `runSchemaMigration` do projeto.
+ * Igual ao CRM - sem callbacks, sem tracking table.
  */
-export async function runSchemaMigration(
-  dbUrl: string,
-  options?: MigrationOptions
-) {
-  const { onProgress } = options || {};
+export async function runSchemaMigration(dbUrl: string) {
+  console.log('[migrations] Iniciando runSchemaMigration...');
+  console.log('[migrations] MIGRATIONS_DIR:', MIGRATIONS_DIR);
+
   const migrationFiles = listMigrationFiles();
+  console.log('[migrations] Arquivos encontrados:', migrationFiles.length, migrationFiles);
 
   if (migrationFiles.length === 0) {
     throw new Error('Nenhum arquivo de migration encontrado em supabase/migrations/');
   }
 
   const normalizedDbUrl = stripSslModeParam(dbUrl);
-
-  onProgress?.({ stage: 'connecting', message: 'Conectando ao banco de dados...' });
+  console.log('[migrations] Conectando ao banco (URL mascarada)...');
 
   const createClient = () =>
     new Client({
       connectionString: normalizedDbUrl,
+      // NOTE: Supabase DB uses TLS; on some networks a MITM/corporate proxy can inject a cert chain
+      // that Node doesn't trust. For the installer/migrations step we prefer "no-verify" over failure.
       ssl: needsSsl(dbUrl) ? { rejectUnauthorized: false } : undefined,
     });
 
   const client = await connectClientWithRetry(createClient, { maxAttempts: 5, initialDelayMs: 3000 });
+  console.log('[migrations] Conexão estabelecida com sucesso!');
 
   try {
-    // Cria tabela de tracking de migrations se não existir
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS _smartzap_migrations (
-        id SERIAL PRIMARY KEY,
-        name TEXT UNIQUE NOT NULL,
-        applied_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `);
-
-    // Verifica quais migrations já foram aplicadas
-    const { rows: appliedRows } = await client.query<{ name: string }>(
-      'SELECT name FROM _smartzap_migrations ORDER BY id'
-    );
-    const appliedSet = new Set(appliedRows.map((r) => r.name));
-
-    // Aplica migrations pendentes
-    const pendingMigrations = migrationFiles.filter(f => !appliedSet.has(f));
-    let applied = 0;
-
+    // SmartZap não usa Storage, então não precisa esperar.
+    // Executa todos os arquivos de migration em ordem.
     for (const file of migrationFiles) {
-      if (appliedSet.has(file)) {
-        console.log(`[migrations] Pulando ${file} (já aplicada)`);
-        continue;
-      }
-
-      applied++;
-      onProgress?.({
-        stage: 'applying',
-        message: `Aplicando ${file}...`,
-        current: applied,
-        total: pendingMigrations.length,
-      });
-
       console.log(`[migrations] Aplicando ${file}...`);
       const filePath = path.join(MIGRATIONS_DIR, file);
       const sql = fs.readFileSync(filePath, 'utf8');
 
       try {
         await client.query(sql);
-        await client.query(
-          'INSERT INTO _smartzap_migrations (name) VALUES ($1)',
-          [file]
-        );
         console.log(`[migrations] ${file} aplicada com sucesso`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        // Se o objeto já existe, não é erro - migration já foi aplicada
         if (msg.includes('already exists')) {
-          console.log(`[migrations] ${file} provavelmente já foi aplicada (objeto já existe)`);
-          await client.query(
-            'INSERT INTO _smartzap_migrations (name) VALUES ($1) ON CONFLICT (name) DO NOTHING',
-            [file]
-          );
+          console.log(`[migrations] ${file} já aplicada (objeto já existe)`);
           continue;
         }
         throw err;
       }
     }
 
-    onProgress?.({ stage: 'done', message: 'Migrations concluídas!' });
     console.log('[migrations] Todas as migrations aplicadas com sucesso!');
   } finally {
     await client.end();

@@ -133,17 +133,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     console.log(`[ai-agents/test] Using model: ${modelId}`)
 
-    // Build system prompt with structured output instructions
-    const systemPrompt = `${agent.system_prompt}
-
-INSTRUÇÕES IMPORTANTES:
-1. Responda sempre em português do Brasil
-2. Seja educado, profissional e empático
-3. Se não souber a resposta, admita e ofereça alternativas
-4. Detecte o sentimento do usuário (positivo, neutro, negativo, frustrado)
-5. Defina shouldHandoff como true se não puder ajudar
-
-IMPORTANTE: Você DEVE usar a ferramenta "respond" para enviar sua resposta.`
+    // Use system prompt exactly as configured
+    const systemPrompt = agent.system_prompt
 
     // Generate response
     const startTime = Date.now()
@@ -154,37 +145,68 @@ IMPORTANTE: Você DEVE usar a ferramenta "respond" para enviar sua resposta.`
     // Capture structured response from tool
     let structuredResponse: TestResponse | undefined
 
-    // Define the respond tool
-    const respondTool = tool({
-      description: 'Envia uma resposta estruturada ao usuário. SEMPRE use esta ferramenta.',
-      inputSchema: testResponseSchema,
-      execute: async (params) => {
-        structuredResponse = params
-        return params
-      },
-    })
+    console.log(`[ai-agents/test] hasFileSearch: ${hasFileSearch}, store: ${agent.file_search_store_id}`)
 
-    // Use streamText with tools for structured output (AI SDK v6 pattern)
-    // Note: File Search would need separate implementation due to tool incompatibility
-    if (hasFileSearch) {
-      console.log(`[ai-agents/test] File Search available but using respond tool for structured output`)
-    }
+    if (hasFileSearch && agent.file_search_store_id) {
+      // WITH KNOWLEDGE BASE: Use file_search (returns plain text with auto-injected context)
+      console.log(`[ai-agents/test] Using File Search with store: ${agent.file_search_store_id}`)
 
-    const result = streamText({
-      model,
-      system: systemPrompt,
-      prompt: message,
-      temperature: agent.temperature ?? 0.7,
-      maxOutputTokens: agent.max_tokens ?? 1024,
-      tools: {
-        respond: respondTool,
-      },
-      toolChoice: 'required',
-    })
+      const { generateText } = await import('ai')
 
-    // Consume the stream completely to trigger tool execution
-    for await (const _part of result.fullStream) {
-      // Just consume - the tool execute function captures the response
+      const result = await generateText({
+        model,
+        system: systemPrompt,
+        prompt: message,
+        tools: {
+          file_search: google.tools.fileSearch({
+            fileSearchStoreNames: [agent.file_search_store_id],
+            topK: 5,
+          }),
+        },
+        temperature: agent.temperature ?? 0.7,
+        maxOutputTokens: agent.max_tokens ?? 1024,
+      })
+
+      // Create structured response from plain text
+      structuredResponse = {
+        message: result.text || 'Desculpe, não consegui gerar uma resposta.',
+        sentiment: 'neutral',
+        confidence: 0.8,
+        shouldHandoff: false,
+      }
+
+      console.log(`[ai-agents/test] File Search response: ${structuredResponse.message.slice(0, 100)}...`)
+
+    } else {
+      // WITHOUT KNOWLEDGE BASE: Use respond tool for structured output
+      console.log(`[ai-agents/test] Using respond tool (no knowledge base)`)
+
+      // Define the respond tool
+      const respondTool = tool({
+        description: 'Envia uma resposta estruturada ao usuário.',
+        inputSchema: testResponseSchema,
+        execute: async (params) => {
+          structuredResponse = params
+          return params
+        },
+      })
+
+      const result = streamText({
+        model,
+        system: systemPrompt,
+        prompt: message,
+        temperature: agent.temperature ?? 0.7,
+        maxOutputTokens: agent.max_tokens ?? 1024,
+        tools: {
+          respond: respondTool,
+        },
+        toolChoice: 'required',
+      })
+
+      // Consume the stream completely to trigger tool execution
+      for await (const _part of result.fullStream) {
+        // Just consume - the tool execute function captures the response
+      }
     }
 
     const latencyMs = Date.now() - startTime

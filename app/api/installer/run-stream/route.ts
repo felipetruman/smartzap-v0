@@ -142,13 +142,16 @@ async function withRetry<T>(
         throw err;
       }
 
-      console.log(`[run-stream] Step ${stepId} failed (attempt ${attempt}/${MAX_RETRIES}), retrying...`);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      const errorStack = err instanceof Error ? err.stack : undefined;
+      console.error(`[run-stream] Step ${stepId} failed (attempt ${attempt}/${MAX_RETRIES}):`, errorMsg);
+      if (errorStack) console.error(`[run-stream] Stack:`, errorStack);
       await sendEvent({
         type: 'retry',
         stepId,
         retryCount: attempt,
         maxRetries: MAX_RETRIES,
-        error: err instanceof Error ? err.message : 'Unknown error',
+        error: errorMsg,
       });
 
       await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt));
@@ -369,37 +372,15 @@ export async function POST(req: Request) {
             console.log('[run-stream] Schema já aplicado, pulando migrations');
             skippedSteps.push('migrations');
           } else {
+            // Igual ao CRM - chamada simples sem callbacks
             await withRetry(
               'migrations',
               async () => {
-                await runSchemaMigration(resolvedDbUrl, {
-                  onProgress: async (migrationProgress) => {
-                    const stageMessages: Record<string, string> = {
-                      connecting: 'Conectando ao banco...',
-                      applying: migrationProgress.current
-                        ? `Migration ${migrationProgress.current}/${migrationProgress.total}`
-                        : 'Aplicando migrations...',
-                      done: 'Migrations concluídas!',
-                    };
-
-                    await sendEvent({
-                      type: 'phase',
-                      phase: 'station',
-                      title: 'Instalando conhecimento',
-                      subtitle: stageMessages[migrationProgress.stage] || migrationProgress.message,
-                      progress: progress.partialProgress(
-                        'migrations',
-                        migrationProgress.stage === 'connecting' ? 0.1 :
-                        migrationProgress.stage === 'applying' && migrationProgress.current && migrationProgress.total
-                          ? 0.1 + (0.8 * (migrationProgress.current / migrationProgress.total))
-                          : 0.95
-                      ),
-                    });
-                  },
-                });
+                await runSchemaMigration(resolvedDbUrl);
               },
               sendEvent,
               (err) => {
+                // Don't retry if it's a schema conflict (already applied)
                 const msg = err instanceof Error ? err.message : '';
                 return !msg.includes('already exists');
               }
