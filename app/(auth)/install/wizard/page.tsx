@@ -183,24 +183,8 @@ export default function InstallWizardPage() {
             } else if (event.type === 'complete' && event.ok) {
               setProvisioningProgress(100);
               setPhase('success');
-
-              // Clean up ALL install data to prevent redirect loops
-              // Sensitive data
-              localStorage.removeItem(STORAGE_KEYS.SUPABASE_PAT);
-              localStorage.removeItem(STORAGE_KEYS.VERCEL_TOKEN);
-              localStorage.removeItem(STORAGE_KEYS.USER_PASS_HASH);
-              sessionStorage.removeItem(STORAGE_KEYS.USER_PASS_PLAIN);
-              // Other tokens (to avoid inconsistent state and redirect loops)
-              localStorage.removeItem(STORAGE_KEYS.USER_EMAIL);
-              localStorage.removeItem(STORAGE_KEYS.VERCEL_PROJECT);
-              localStorage.removeItem(STORAGE_KEYS.SUPABASE_URL);
-              localStorage.removeItem(STORAGE_KEYS.SUPABASE_REF);
-              localStorage.removeItem(STORAGE_KEYS.SUPABASE_PUBLISHABLE_KEY);
-              localStorage.removeItem(STORAGE_KEYS.SUPABASE_SECRET_KEY);
-              localStorage.removeItem(STORAGE_KEYS.SUPABASE_DB_PASS);
-              localStorage.removeItem(STORAGE_KEYS.QSTASH_TOKEN);
-              localStorage.removeItem(STORAGE_KEYS.REDIS_REST_URL);
-              localStorage.removeItem(STORAGE_KEYS.REDIS_REST_TOKEN);
+              // NÃO limpar tokens aqui - será feito no clique do botão "Entrar na Matrix"
+              // Isso evita race condition se a página recarregar antes de mostrar o success
             }
           } catch (parseErr) {
             console.error('[wizard] Erro ao parsear evento:', parseErr);
@@ -331,7 +315,25 @@ export default function InstallWizardPage() {
   }, [data, handleStream]);
 
   const handleGoToDashboard = () => {
-    router.push('/');
+    // Limpar TODOS os dados do instalador antes de redirecionar
+    // (igual ao CRM - só limpa quando o usuário clica no botão)
+    localStorage.removeItem(STORAGE_KEYS.SUPABASE_PAT);
+    localStorage.removeItem(STORAGE_KEYS.VERCEL_TOKEN);
+    localStorage.removeItem(STORAGE_KEYS.USER_PASS_HASH);
+    sessionStorage.removeItem(STORAGE_KEYS.USER_PASS_PLAIN);
+    localStorage.removeItem(STORAGE_KEYS.USER_EMAIL);
+    localStorage.removeItem(STORAGE_KEYS.VERCEL_PROJECT);
+    localStorage.removeItem(STORAGE_KEYS.SUPABASE_URL);
+    localStorage.removeItem(STORAGE_KEYS.SUPABASE_REF);
+    localStorage.removeItem(STORAGE_KEYS.SUPABASE_PUBLISHABLE_KEY);
+    localStorage.removeItem(STORAGE_KEYS.SUPABASE_SECRET_KEY);
+    localStorage.removeItem(STORAGE_KEYS.SUPABASE_DB_PASS);
+    localStorage.removeItem(STORAGE_KEYS.QSTASH_TOKEN);
+    localStorage.removeItem(STORAGE_KEYS.REDIS_REST_URL);
+    localStorage.removeItem(STORAGE_KEYS.REDIS_REST_TOKEN);
+
+    // Redirecionar para login (igual ao CRM)
+    window.location.href = '/login';
   };
 
   const handleRetry = () => {
