@@ -2,17 +2,17 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Settings } from 'lucide-react';
+import { Search, Settings, RefreshCw } from 'lucide-react';
 import { useTelegramSDK } from '@/components/telegram/TelegramSDKProvider';
-import { useHaptic } from '@/hooks/telegram';
 import {
-  MOCK_CONVERSATIONS,
+  useHaptic,
+  useTelegramConversations,
   formatRelativeTime,
   getStatusEmoji,
   getStatusLabel,
   getStatusColor,
-  type MockConversation,
-} from '@/lib/telegram/mock-data';
+  type TelegramConversation,
+} from '@/hooks/telegram';
 
 // =============================================================================
 // TIPOS
@@ -84,7 +84,7 @@ function ConversationItem({
   conversation,
   onClick,
 }: {
-  conversation: MockConversation;
+  conversation: TelegramConversation;
   onClick: () => void;
 }) {
   const { selection } = useHaptic();
@@ -149,11 +149,16 @@ function ConversationItem({
             )}
           </div>
 
-          {/* Status badge */}
+          {/* Status badge + AI Agent name */}
           <div className="mt-1.5 flex items-center gap-1.5">
             <span className={`text-xs ${getStatusColor(conversation.status)}`}>
               {getStatusEmoji(conversation.status)} {getStatusLabel(conversation.status)}
             </span>
+            {conversation.aiAgentName && conversation.status === 'ai_active' && (
+              <span className="text-xs text-[var(--tg-theme-hint-color)]">
+                • {conversation.aiAgentName}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -203,12 +208,25 @@ function EmptyState({ filter }: { filter: FilterTab }) {
 export default function InboxPage() {
   const router = useRouter();
   const { user } = useTelegramSDK();
+  const { notification } = useHaptic();
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Filtrar conversas
+  // Buscar conversas reais da API
+  const {
+    conversations,
+    counts: apiCounts,
+    isLoading,
+    isRefetching,
+    refetch,
+  } = useTelegramConversations({
+    status: 'open', // Só conversas abertas
+    search: searchQuery || undefined,
+  });
+
+  // Filtrar conversas por tab (client-side para UX mais rápida)
   const filteredConversations = useMemo(() => {
-    let filtered = MOCK_CONVERSATIONS;
+    let filtered = conversations;
 
     // Filtro por tab
     switch (activeTab) {
@@ -223,32 +241,27 @@ export default function InboxPage() {
         break;
     }
 
-    // Filtro por busca
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (c) =>
-          c.contactName.toLowerCase().includes(query) ||
-          c.contactPhone.includes(query) ||
-          c.lastMessage.toLowerCase().includes(query)
-      );
-    }
-
     // Ordenar: urgentes primeiro, depois por data
     return filtered.sort((a, b) => {
       if (a.status === 'handoff_requested' && b.status !== 'handoff_requested') return -1;
       if (b.status === 'handoff_requested' && a.status !== 'handoff_requested') return 1;
-      return b.lastMessageAt.getTime() - a.lastMessageAt.getTime();
+      return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime();
     });
-  }, [activeTab, searchQuery]);
+  }, [activeTab, conversations]);
 
   // Contagens para as tabs
   const counts: Record<FilterTab, number> = useMemo(() => ({
-    all: MOCK_CONVERSATIONS.length,
-    urgent: MOCK_CONVERSATIONS.filter((c) => c.status === 'handoff_requested').length,
-    ai: MOCK_CONVERSATIONS.filter((c) => c.status === 'ai_active').length,
-    human: MOCK_CONVERSATIONS.filter((c) => c.status === 'human_active').length,
-  }), []);
+    all: apiCounts.total,
+    urgent: apiCounts.urgent,
+    ai: apiCounts.ai,
+    human: apiCounts.human,
+  }), [apiCounts]);
+
+  // Função para refresh manual
+  const handleRefresh = () => {
+    notification('success');
+    refetch();
+  };
 
   return (
     <div className="flex flex-col h-screen">
@@ -261,13 +274,28 @@ export default function InboxPage() {
               Olá, {user?.firstName}!
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => router.push('/tg/settings')}
-            className="p-2 rounded-lg hover:bg-[var(--tg-theme-secondary-bg-color)] transition-colors"
-          >
-            <Settings size={22} className="text-[var(--tg-theme-hint-color)]" />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Refresh button */}
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={isRefetching}
+              className="p-2 rounded-lg hover:bg-[var(--tg-theme-secondary-bg-color)] transition-colors disabled:opacity-50"
+            >
+              <RefreshCw
+                size={20}
+                className={`text-[var(--tg-theme-hint-color)] ${isRefetching ? 'animate-spin' : ''}`}
+              />
+            </button>
+            {/* Settings button */}
+            <button
+              type="button"
+              onClick={() => router.push('/tg/settings')}
+              className="p-2 rounded-lg hover:bg-[var(--tg-theme-secondary-bg-color)] transition-colors"
+            >
+              <Settings size={22} className="text-[var(--tg-theme-hint-color)]" />
+            </button>
+          </div>
         </div>
 
         {/* Search */}
@@ -291,7 +319,21 @@ export default function InboxPage() {
 
       {/* Conversation list */}
       <div className="flex-1 overflow-y-auto">
-        {filteredConversations.length === 0 ? (
+        {isLoading ? (
+          // Loading skeleton
+          <div className="space-y-4 p-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex gap-3 animate-pulse">
+                <div className="w-12 h-12 rounded-full bg-[var(--tg-theme-secondary-bg-color)]" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-[var(--tg-theme-secondary-bg-color)] rounded w-1/3" />
+                  <div className="h-3 bg-[var(--tg-theme-secondary-bg-color)] rounded w-2/3" />
+                  <div className="h-3 bg-[var(--tg-theme-secondary-bg-color)] rounded w-1/4" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filteredConversations.length === 0 ? (
           <EmptyState filter={activeTab} />
         ) : (
           filteredConversations.map((conversation) => (

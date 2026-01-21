@@ -168,9 +168,7 @@ import {
     Loader2,
     Check,
     Save,
-    AlertCircle,
-    Eye,
-    X
+    AlertCircle
 } from 'lucide-react';
 import { GeneratedTemplate } from '@/lib/ai/services/template-agent';
 import { templateService } from '@/lib/whatsapp/template.service';
@@ -193,6 +191,26 @@ export default function NewTemplateProjectPage() {
     // Results State
     const [generatedTemplates, setGeneratedTemplates] = useState<GeneratedTemplate[]>([]);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+    // Preview State - hover mostra variáveis preenchidas
+    const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+    // Valores de exemplo para substituir variáveis no preview
+    const EXAMPLE_VALUES: Record<string, string> = {
+        '1': 'João Silva',
+        '2': 'Pedido #12345',
+        '3': '25/01/2025',
+        '4': 'R$ 199,90',
+        '5': '10:00',
+        '6': 'Produto XYZ',
+    };
+
+    // Substitui {{N}} por valores de exemplo
+    const fillVariables = (text: string): string => {
+        return text.replace(/\{\{(\d+)\}\}/g, (_, num) => {
+            return EXAMPLE_VALUES[num] || `[Variável ${num}]`;
+        });
+    };
 
     // Conteúdo contextual baseado na estratégia
     const content = useMemo(() => {
@@ -473,10 +491,14 @@ export default function NewTemplateProjectPage() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {generatedTemplates.map((t) => (
+                        {generatedTemplates.map((t) => {
+                            const isHovered = hoveredId === t.id;
+                            return (
                             <div
                                 key={t.id}
                                 onClick={() => toggleSelect(t.id)}
+                                onMouseEnter={() => setHoveredId(t.id)}
+                                onMouseLeave={() => setHoveredId(null)}
                                 className={`
                   relative p-4 rounded-2xl border cursor-pointer transition-all hover:shadow-[0_12px_30px_rgba(0,0,0,0.35)]
                   ${selectedIds.has(t.id)
@@ -484,25 +506,35 @@ export default function NewTemplateProjectPage() {
                                         : 'border-[var(--ds-border-default)] bg-[var(--ds-bg-surface)]'}
                 `}
                             >
-                                {selectedIds.has(t.id) && (
-                                    <div className="absolute top-2 right-2 p-1 bg-emerald-500 text-black rounded-full">
-                                        <Check className="w-3 h-3" />
-                                    </div>
-                                )}
+                                {/* Check de seleção + indicador de preview */}
+                                <div className="absolute top-2 right-2 flex items-center gap-1">
+                                    {isHovered && (
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-medium">
+                                            Preview
+                                        </span>
+                                    )}
+                                    {selectedIds.has(t.id) && (
+                                        <div className="p-1 bg-emerald-500 text-black rounded-full">
+                                            <Check className="w-3 h-3" />
+                                        </div>
+                                    )}
+                                </div>
 
                                 {/* Header */}
                                 <div className="mb-3">
                                     <span className="text-xs font-mono text-[var(--ds-text-muted)]">{t.name}</span>
                                     {t.header && (
                                         <div className="mt-1 font-semibold text-sm text-[var(--ds-text-primary)]">
-                                            {t.header.text || `[Mídia: ${t.header.format}]`}
+                                            {t.header.text
+                                                ? (isHovered ? fillVariables(t.header.text) : t.header.text)
+                                                : `[Mídia: ${t.header.format}]`}
                                         </div>
                                     )}
                                 </div>
 
                                 {/* Body */}
-                                <div className="text-sm text-[var(--ds-text-secondary)] whitespace-pre-wrap mb-4">
-                                    {t.content}
+                                <div className={`text-sm whitespace-pre-wrap mb-4 transition-colors ${isHovered ? 'text-emerald-300' : 'text-[var(--ds-text-secondary)]'}`}>
+                                    {isHovered ? fillVariables(t.content) : t.content}
                                 </div>
 
                                 {/* Footer */}
@@ -542,7 +574,8 @@ export default function NewTemplateProjectPage() {
                                     </div>
                                 )}
                             </div>
-                        ))}
+                        );
+                        })}
                     </div>
                 </div>
             )}

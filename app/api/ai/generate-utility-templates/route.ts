@@ -259,13 +259,21 @@ export async function POST(request: NextRequest) {
     const promptsConfig = await getAiPromptsConfig()
     let templates: GeneratedTemplate[]
 
-    console.log(`[GENERATE] Using unified prompt-based generation... (strategy: ${strategy})`)
+    // Seleciona o prompt correto baseado na estratégia
+    const strategyPromptMap: Record<typeof strategy, string> = {
+      marketing: promptsConfig.strategyMarketing,
+      utility: promptsConfig.strategyUtility,
+      bypass: promptsConfig.strategyBypass,
+    }
+    const selectedPrompt = strategyPromptMap[strategy] || promptsConfig.utilityGenerationTemplate
+
+    console.log(`[GENERATE] Using strategy "${strategy}" prompt (${selectedPrompt.length} chars)`)
     templates = await generateWithUnifiedPrompt(
       userPrompt,
       quantity,
       language,
       primaryUrl,
-      promptsConfig.utilityGenerationTemplate,
+      selectedPrompt,
       strategy
     )
 
