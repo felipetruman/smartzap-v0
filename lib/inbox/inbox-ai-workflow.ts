@@ -4,28 +4,20 @@
  * Usa Upstash Workflow para processar mensagens do inbox com debounce durável.
  * Resolve o problema do setTimeout que não sobrevive à morte da função serverless.
  *
- * IMPORTANTE: Usa context.call() para chamadas de IA
- * - context.run() → função serverless ESPERA (consome compute)
- * - context.call() → UPSTASH espera (não consome compute, até 2h timeout)
- *
  * Fluxo:
  * 1. Webhook recebe mensagem → dispara workflow
  * 2. Workflow espera (context.sleep) para acumular mensagens
  * 3. Verifica estado da conversa (context.run)
- * 4. Processa com IA via API interna (context.call) ← DURÁVEL
+ * 4. Processa com IA diretamente (context.run + processChatAgent)
  * 5. Envia resposta via WhatsApp
  */
 
 import type { WorkflowContext } from '@upstash/workflow'
 import { getRedis, REDIS_KEYS } from '@/lib/upstash/redis'
 import type { AIAgent, InboxConversation, InboxMessage } from '@/types'
-import type { SupportAgentResult } from '@/lib/ai/agents/chat-agent'
 
 // Constantes
 const DEBOUNCE_SECONDS = 2
-const MAX_DEBOUNCE_LOOPS = 10 // Evita loop infinito (máx 50s de espera)
-const AI_CALL_TIMEOUT_SECONDS = 120 // 2 minutos para chamada de IA
-const AI_CALL_RETRIES = 2 // Número de retries em caso de falha
 
 // =============================================================================
 // Types
@@ -55,9 +47,8 @@ export async function processInboxAIWorkflow(context: WorkflowContext) {
   console.log(`[inbox-ai-workflow] Starting for conversation ${conversationId}`)
 
   // =========================================================================
-  // Step 1: Debounce simples - espera única de 5s
+  // Step 1: Debounce simples - espera para acumular mensagens
   // =========================================================================
-  // TODO: Reativar loop de debounce quando latência não for problema
 
   await context.sleep('debounce-wait', `${DEBOUNCE_SECONDS}s`)
   console.log(`[inbox-ai-workflow] Debounce complete after ${DEBOUNCE_SECONDS}s`)
@@ -163,61 +154,22 @@ export async function processInboxAIWorkflow(context: WorkflowContext) {
   const messages = fetchResult.messages
 
   // =========================================================================
-  // Step 3: Processar com IA via context.call()
+  // Step 3: Processar com IA via context.run()
   // =========================================================================
-  // IMPORTANTE: Usamos context.call() em vez de context.run() porque:
-  // - context.run() → função serverless ESPERA a IA (consome compute)
-  // - context.call() → UPSTASH faz a chamada HTTP (não consome compute)
-  //
-  // Benefícios:
-  // - Timeout de até 2 horas (vs limite da plataforma)
-  // - Retries automáticos
-  // - Função não fica "travada" esperando
+  // Chama processChatAgent diretamente. Apesar de consumir compute serverless
+  // durante a espera, é mais simples e confiável que context.call().
   // =========================================================================
 
-  // Monta URL da API interna
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
-  if (!baseUrl) {
-    console.error('[inbox-ai-workflow] No base URL configured (NEXT_PUBLIC_APP_URL or VERCEL_URL)')
-    return { status: 'error', error: 'No base URL configured' }
-  }
+  console.log(`[inbox-ai-workflow] Processing with AI: agent=${agent.name}, messages=${messages.length}`)
 
-  const aiApiUrl = `${baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`}/api/internal/ai-generate`
-  const apiKey = process.env.SMARTZAP_API_KEY || ''
-  console.log(`[inbox-ai-workflow] Calling AI API: ${aiApiUrl}`)
-  console.log(`[inbox-ai-workflow] Payload: agent=${agent.name}, messages=${messages.length}, apiKey=${apiKey ? 'present' : 'MISSING'}`)
+  const aiResult = await context.run('process-ai', async () => {
+    const { processChatAgent } = await import('@/lib/ai/agents/chat-agent')
 
-  const aiCallResult = await context.call<SupportAgentResult>('process-ai', {
-    url: aiApiUrl,
-    method: 'POST',
-    body: {
+    const result = await processChatAgent({
       agent,
       conversation,
       messages,
-    },
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey,
-    },
-    timeout: AI_CALL_TIMEOUT_SECONDS,
-    retries: AI_CALL_RETRIES,
-  })
-
-  console.log(`[inbox-ai-workflow] AI API returned status: ${aiCallResult.status}`)
-
-  // Processa resultado da chamada HTTP
-  const aiResult = (() => {
-    // Verifica se a chamada HTTP foi bem-sucedida
-    if (aiCallResult.status !== 200) {
-      console.error(`[inbox-ai-workflow] AI API returned status ${aiCallResult.status}:`, aiCallResult.body)
-      return {
-        success: false,
-        error: `AI API error: status ${aiCallResult.status}`,
-      }
-    }
-
-    // Extrai resultado do body
-    const result = aiCallResult.body as SupportAgentResult
+    })
 
     return {
       success: result.success,
@@ -230,7 +182,9 @@ export async function processInboxAIWorkflow(context: WorkflowContext) {
       logId: result.logId,
       error: result.error,
     }
-  })()
+  })
+
+  console.log(`[inbox-ai-workflow] AI processing result: success=${aiResult.success}`)
 
   if (!aiResult.success || !aiResult.message) {
     console.log(`[inbox-ai-workflow] AI processing failed: ${aiResult.error}`)

@@ -1,10 +1,12 @@
 'use client';
 
+import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StepCard } from './StepCard';
 import { cn } from '@/lib/utils';
+import { playError } from '@/hooks/useSoundFX';
 import type { InstallStep } from '@/lib/installer/types';
 
 interface ErrorViewProps {
@@ -28,6 +30,11 @@ const STEP_NAMES: Record<InstallStep, string> = {
  * Tema Blade Runner - "Falha de Replicação"
  */
 export function ErrorView({ error, errorDetails, returnToStep, onRetry, onGoToStep }: ErrorViewProps) {
+  // Som de erro ao montar
+  useEffect(() => {
+    playError();
+  }, []);
+
   return (
     <StepCard glowColor="red">
       <div className="flex flex-col items-center text-center py-8">

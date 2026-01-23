@@ -33,6 +33,10 @@ export function RedisForm({ data, onComplete, onBack, showBack }: FormProps) {
     setValidating(true);
     setError(null);
 
+    // Tempo mínimo para apreciar a narrativa
+    const MIN_VALIDATION_TIME = 2500;
+    const startTime = Date.now();
+
     try {
       const res = await fetch('/api/installer/redis/validate', {
         method: 'POST',
@@ -49,8 +53,18 @@ export function RedisForm({ data, onComplete, onBack, showBack }: FormProps) {
         throw new Error(result.error || 'Credenciais inválidas');
       }
 
+      // Garantir tempo mínimo de exibição
+      const elapsed = Date.now() - startTime;
+      if (elapsed < MIN_VALIDATION_TIME) {
+        await new Promise(r => setTimeout(r, MIN_VALIDATION_TIME - elapsed));
+      }
+
       setSuccess(true);
     } catch (err) {
+      const elapsed = Date.now() - startTime;
+      if (elapsed < MIN_VALIDATION_TIME) {
+        await new Promise(r => setTimeout(r, MIN_VALIDATION_TIME - elapsed));
+      }
       setError(err instanceof Error ? err.message : 'Falha na conexão');
       setRestUrl('');
       setRestToken('');

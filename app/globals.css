@@ -961,8 +961,8 @@ textarea:focus-visible {
    BLADE RUNNER INSTALLER THEME
    ================================ */
 
-/* Blade Runner Color Palette */
-.blade-runner {
+/* Blade Runner Color Palette - Global para todos os componentes */
+:root {
   /* Primary neon colors */
   --br-neon-cyan: #0ABDC6;
   --br-neon-magenta: #EA00D9;
@@ -983,6 +983,11 @@ textarea:focus-visible {
   --br-glow-cyan: 0 0 5px rgba(10, 189, 198, 0.5), 0 0 20px rgba(10, 189, 198, 0.3), 0 0 40px rgba(10, 189, 198, 0.1);
   --br-glow-magenta: 0 0 5px rgba(234, 0, 217, 0.5), 0 0 20px rgba(234, 0, 217, 0.3), 0 0 40px rgba(234, 0, 217, 0.1);
   --br-glow-orange: 0 0 5px rgba(247, 139, 4, 0.5), 0 0 20px rgba(247, 139, 4, 0.3);
+}
+
+/* Scoped class para ativar tema no container */
+.blade-runner {
+  color-scheme: dark;
 }
 
 /* Rain effect background */

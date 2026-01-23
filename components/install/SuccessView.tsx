@@ -1,10 +1,12 @@
 'use client';
 
+import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StepCard } from './StepCard';
 import { cn } from '@/lib/utils';
+import { playComplete } from '@/hooks/useSoundFX';
 
 interface SuccessViewProps {
   name: string;
@@ -25,6 +27,11 @@ function sanitizeFirstName(fullName: string): string {
  */
 export function SuccessView({ name }: SuccessViewProps) {
   const firstName = sanitizeFirstName(name);
+
+  // Som de conclusão ao montar
+  useEffect(() => {
+    playComplete();
+  }, []);
 
   const handleGoToDashboard = () => {
     window.location.href = '/login';
@@ -52,7 +59,7 @@ export function SuccessView({ name }: SuccessViewProps) {
         <motion.h2
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
+          transition={{ delay: 0.5 }}
           className="mt-6 text-xl font-mono font-bold text-[var(--br-hologram-white)] uppercase tracking-wide"
         >
           Incubação Completa, {firstName}.
@@ -62,7 +69,7 @@ export function SuccessView({ name }: SuccessViewProps) {
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
+          transition={{ delay: 0.9 }}
           className="mt-2 text-sm text-[var(--br-neon-magenta)] font-mono italic"
         >
           &quot;Mais humano que humano&quot;
@@ -72,7 +79,7 @@ export function SuccessView({ name }: SuccessViewProps) {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
+          transition={{ delay: 1.3 }}
           className="mt-8 w-full"
         >
           <Button
@@ -95,7 +102,7 @@ export function SuccessView({ name }: SuccessViewProps) {
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
+          transition={{ delay: 1.7 }}
           className="mt-4 text-xs text-[var(--br-dust-gray)] font-mono"
         >
           Configure a API do WhatsApp em Configurações • Seu baseline foi registrado

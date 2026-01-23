@@ -1,10 +1,11 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useRef } from 'react';
 import { StepDots } from './StepDots';
 import { RainEffect } from './RainEffect';
 import { cn } from '@/lib/utils';
+import { startAmbient, stopAmbient } from '@/hooks/useSoundFX';
 
 interface InstallLayoutProps {
   children: ReactNode;
@@ -27,6 +28,31 @@ export function InstallLayout({
   showDots = true,
   className,
 }: InstallLayoutProps) {
+  const audioStartedRef = useRef(false);
+
+  // Inicia ambient após primeira interação (política de autoplay)
+  useEffect(() => {
+    const enableAudio = () => {
+      if (!audioStartedRef.current) {
+        audioStartedRef.current = true;
+        console.log('[InstallLayout] User interaction detected, starting ambient...');
+        startAmbient();
+        // Remove listeners após ativar
+        document.removeEventListener('click', enableAudio);
+        document.removeEventListener('keydown', enableAudio);
+      }
+    };
+
+    document.addEventListener('click', enableAudio);
+    document.addEventListener('keydown', enableAudio);
+
+    // Cleanup só no unmount
+    return () => {
+      document.removeEventListener('click', enableAudio);
+      document.removeEventListener('keydown', enableAudio);
+      stopAmbient();
+    };
+  }, []); // Sem dependências - roda só uma vez
   return (
     <div
       className={cn(
