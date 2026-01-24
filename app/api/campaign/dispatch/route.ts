@@ -186,19 +186,33 @@ export async function POST(request: NextRequest) {
   // - O workflow reutiliza este mesmo traceId.
   const traceId = `cmp_${campaignId}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
 
-  // Carrega campanha cedo para:
-  // - validar gatilho de agendamento (evitar job “fantasma” após cancelamento)
+  // Carrega campanha E template em paralelo para:
+  // - validar gatilho de agendamento (evitar job "fantasma" após cancelamento)
   // - obter template_variables quando necessário
   // - evitar queries duplicadas (template_spec_hash)
-  const { data: campaignRow, error: campaignError } = await supabase
-    .from('campaigns')
-    .select('status, scheduled_date, template_variables, template_spec_hash')
-    .eq('id', campaignId)
-    .single()
+  // PERFORMANCE: Parallelized - these are independent queries
+  const [campaignResult, initialTemplate] = await Promise.all([
+    supabase
+      .from('campaigns')
+      .select('status, scheduled_date, template_variables, template_spec_hash')
+      .eq('id', campaignId)
+      .single(),
+    templateDb.getByName(templateName),
+  ])
+
+  const { data: campaignRow, error: campaignError } = campaignResult
 
   if (campaignError || !campaignRow) {
     console.error('[Dispatch] Campaign not found:', campaignError)
     return NextResponse.json({ error: 'Campanha não encontrada' }, { status: 404 })
+  }
+
+  // Validar template (fetched em paralelo acima)
+  if (!initialTemplate) {
+    return NextResponse.json(
+      { error: 'Template não encontrado no banco local. Sincronize Templates antes de disparar.' },
+      { status: 400 }
+    )
   }
 
   // Se o job veio do scheduler, só pode rodar se ainda estiver agendada.
@@ -258,16 +272,7 @@ export async function POST(request: NextRequest) {
     console.log('[Dispatch] Loaded template_variables from database:', resolvedTemplateVariables)
   }
 
-  // Fetch template from local DB cache (source operacional). Documented-only: sem template, sem envio.
-  const initialTemplate = await templateDb.getByName(templateName)
-  if (!initialTemplate) {
-    return NextResponse.json(
-      { error: 'Template não encontrado no banco local. Sincronize Templates antes de disparar.' },
-      { status: 400 }
-    )
-  }
-
-  // A partir daqui, `template` deve ser sempre definido.
+  // A partir daqui, `template` deve ser sempre definido (já validado acima no Promise.all).
   let template = initialTemplate
   const templateComponents = (template as any)?.components || (template as any)?.content || []
   const hasFlowButton = Array.isArray(templateComponents)
@@ -492,41 +497,46 @@ export async function POST(request: NextRequest) {
 
   // =====================================================================
   // Checagens globais (antes do precheck): opt-out + supressões
+  // PERFORMANCE: Parallelized - these are independent lookups
   // =====================================================================
   const uniqueContactIds = Array.from(
     new Set(normalizedInput.map((c) => String(c.contactId || '').trim()).filter(Boolean))
   )
 
-  const statusByContactId = new Map<string, string>()
-  if (uniqueContactIds.length > 0) {
-    const { data: contactRows, error: contactRowsError } = await supabase
-      .from('contacts')
-      .select('id, status')
-      .in('id', uniqueContactIds)
-
-    if (contactRowsError) {
-      console.warn('[Dispatch] Falha ao carregar status dos contatos (best-effort):', contactRowsError)
-    } else {
-      for (const row of (contactRows || []) as any[]) {
-        if (!row?.id) continue
-        statusByContactId.set(String(row.id), String(row.status || ''))
-      }
-    }
-  }
-
   const normalizedPhonesForSuppression = Array.from(
     new Set(normalizedInput.map((c) => normalizePhoneNumber(String(c.phone || '').trim())).filter(Boolean))
   )
 
-  let suppressionsByPhone = new Map<string, { phone: string; reason: string | null; source: string | null }>()
-  try {
-    const active = await getActiveSuppressionsByPhone(normalizedPhonesForSuppression)
-    suppressionsByPhone = new Map(
-      Array.from(active.entries()).map(([phone, row]) => [phone, { phone, reason: row.reason, source: row.source }])
-    )
-  } catch (e) {
-    console.warn('[Dispatch] Falha ao carregar phone_suppressions (best-effort):', e)
+  // Run status and suppressions lookups in parallel (they're independent)
+  const [contactStatusResult, suppressionsResult] = await Promise.all([
+    // Fetch contact statuses
+    uniqueContactIds.length > 0
+      ? supabase.from('contacts').select('id, status').in('id', uniqueContactIds)
+      : Promise.resolve({ data: null, error: null }),
+    // Fetch suppressions
+    getActiveSuppressionsByPhone(normalizedPhonesForSuppression).catch((e) => {
+      console.warn('[Dispatch] Falha ao carregar phone_suppressions (best-effort):', e)
+      return new Map<string, { reason: string | null; source: string | null }>()
+    }),
+  ])
+
+  // Process contact statuses
+  const statusByContactId = new Map<string, string>()
+  if (contactStatusResult.error) {
+    console.warn('[Dispatch] Falha ao carregar status dos contatos (best-effort):', contactStatusResult.error)
+  } else {
+    for (const row of (contactStatusResult.data || []) as any[]) {
+      if (!row?.id) continue
+      statusByContactId.set(String(row.id), String(row.status || ''))
+    }
   }
+
+  // Process suppressions
+  const suppressionsByPhone = suppressionsResult instanceof Map
+    ? new Map(
+        Array.from(suppressionsResult.entries()).map(([phone, row]) => [phone, { phone, reason: row.reason, source: row.source }])
+      )
+    : new Map<string, { phone: string; reason: string | null; source: string | null }>()
 
   const validContacts: DispatchContactResolved[] = []
   const skippedContacts: Array<{ contact: DispatchContact; code: string; reason: string; normalizedPhone?: string }> = []
