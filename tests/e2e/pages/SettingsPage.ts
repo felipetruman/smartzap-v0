@@ -99,9 +99,12 @@ export class SettingsPage {
 
   /**
    * Aguarda a página carregar completamente
+   * Nota: A página de Settings tem polling contínuo de métricas de uso,
+   * então não usamos 'networkidle' (nunca resolveria)
    */
   async waitForLoad(): Promise<void> {
-    await this.page.waitForLoadState('networkidle')
+    // Usa domcontentloaded porque networkidle nunca resolve (polling de métricas)
+    await this.page.waitForLoadState('domcontentloaded')
 
     // Aguarda apenas o título da página (sempre presente)
     await expect(this.pageTitle).toBeVisible({ timeout: 15000 })

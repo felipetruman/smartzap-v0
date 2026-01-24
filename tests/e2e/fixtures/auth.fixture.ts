@@ -6,9 +6,6 @@ import path from 'path'
 const envPath = path.join(process.cwd(), '.env.local')
 dotenv.config({ path: envPath, override: true })
 
-// Debug: verifica o que foi carregado
-console.log('🔑 MASTER_PASSWORD:', process.env.MASTER_PASSWORD ? `${process.env.MASTER_PASSWORD.length} chars` : 'NOT SET')
-
 /**
  * Fixture de autenticação para testes E2E
  * Fornece uma página já autenticada para testes que precisam de login

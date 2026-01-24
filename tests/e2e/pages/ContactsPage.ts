@@ -81,19 +81,23 @@ export class ContactsPage {
     this.previousPageButton = page.getByRole('button', { name: /anterior|prev/i })
 
     // Modal/Formulário de contato (não usa role="dialog", é um formulário inline)
+    // Usa o heading como âncora para encontrar o container do formulário
     this.contactModal = page.getByRole('heading', { name: 'Novo Contato', level: 2 })
       .or(page.getByRole('heading', { name: 'Editar Contato', level: 2 }))
     this.modalTitle = this.contactModal
-    // Campos do formulário - usando label com regex porque pode ter asterisco
-    this.nameInput = page.getByLabel(/Nome Completo/i)
-    this.phoneInput = page.getByLabel(/Telefone.*WhatsApp/i)
-    this.emailInput = page.getByLabel(/E-mail/i)
-    this.tagsInput = page.getByLabel(/Tags/i)
-    this.statusSelect = page.locator('[role="dialog"]').getByLabel('Status')
+
+    // Campos do formulário - usando placeholders exatos para maior confiabilidade
+    // Esses placeholders são únicos e aparecem tanto em "Novo Contato" quanto "Editar Contato"
+    this.nameInput = page.getByPlaceholder('Ex: João Silva')
+    this.phoneInput = page.getByPlaceholder('+55 11 99999-9999')
+    this.emailInput = page.getByPlaceholder('email@exemplo.com')
+    this.tagsInput = page.getByPlaceholder('VIP, Lead, Cliente')
+
+    this.statusSelect = page.getByRole('combobox').filter({ has: page.locator('option:has-text("Opt-in")') })
     this.saveContactButton = page.getByRole('button', { name: 'Salvar Contato' })
     this.saveChangesButton = page.getByRole('button', { name: 'Salvar Alterações' })
     this.cancelButton = page.getByRole('button', { name: 'Cancelar' })
-    this.closeModalButton = page.getByRole('button', { name: 'Fechar formulário de novo contato' })
+    this.closeModalButton = page.getByRole('button', { name: /Fechar formulário/i })
 
     // Loading
     this.loadingSpinner = page.locator('.animate-spin, [role="status"]')
@@ -228,7 +232,8 @@ export class ContactsPage {
     const editButton = row.locator('button').first()
     await editButton.click()
     // Aguarda o formulário de edição aparecer
-    await expect(this.phoneInput).toBeVisible({ timeout: 5000 })
+    await expect(this.page.getByRole('heading', { name: 'Editar Contato', level: 2 }))
+      .toBeVisible({ timeout: 5000 })
   }
 
   /**
@@ -254,7 +259,8 @@ export class ContactsPage {
 
     await this.saveChangesButton.click()
     // Aguarda o formulário fechar
-    await expect(this.phoneInput).not.toBeVisible({ timeout: 10000 })
+    await expect(this.page.getByRole('heading', { name: 'Editar Contato', level: 2 }))
+      .not.toBeVisible({ timeout: 10000 })
     await this.page.waitForLoadState('networkidle')
   }
 
@@ -267,9 +273,18 @@ export class ContactsPage {
     const deleteButton = row.locator('button').last()
     await deleteButton.click()
 
-    // Confirma exclusão no modal/dialog
-    const confirmButton = this.page.getByRole('button', { name: /excluir|confirmar|sim/i })
+    // Aguarda o modal de confirmação aparecer
+    await expect(this.page.getByRole('heading', { name: 'Confirmar Exclusão' }))
+      .toBeVisible({ timeout: 5000 })
+
+    // Confirma exclusão clicando no botão dentro do modal
+    const confirmDialog = this.page.locator('h2:text("Confirmar Exclusão")').locator('xpath=../..')
+    const confirmButton = confirmDialog.getByRole('button', { name: 'Excluir' })
     await confirmButton.click()
+
+    // Aguarda o modal fechar
+    await expect(this.page.getByRole('heading', { name: 'Confirmar Exclusão' }))
+      .not.toBeVisible({ timeout: 5000 })
 
     await this.page.waitForLoadState('networkidle')
   }
