@@ -10,6 +10,8 @@ import { Loader2, Plus, Folder, Search, RefreshCw, CheckCircle, AlertTriangle, T
 import { cn } from '@/lib/utils';
 import { Page, PageActions, PageDescription, PageHeader, PageTitle } from '@/components/ui/page';
 import { Button } from '@/components/ui/button';
+import { Megaphone, Wrench, VenetianMask } from 'lucide-react';
+import type { AIStrategy } from '@/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +30,38 @@ import { flowsService } from '@/services/flowsService'
 import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { LeadFormsView } from '@/components/features/lead-forms/LeadFormsView'
+
+// Strategy Badge Component
+const StrategyBadge = ({ strategy }: { strategy?: AIStrategy }) => {
+  const config = {
+    marketing: {
+      icon: Megaphone,
+      label: 'Marketing',
+      style: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+    },
+    utility: {
+      icon: Wrench,
+      label: 'Utilidade',
+      style: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+    },
+    bypass: {
+      icon: VenetianMask,
+      label: 'Camuflado',
+      style: 'bg-violet-500/10 text-violet-400 border-violet-500/30',
+    },
+  };
+
+  const s = strategy || 'utility';
+  const c = config[s];
+  const Icon = c.icon;
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border ${c.style}`}>
+      <Icon className="w-3 h-3" />
+      {c.label}
+    </span>
+  );
+};
 
 // Status Badge Component
 const StatusBadge = ({ status, approvedCount, totalCount }: { status: string; approvedCount?: number; totalCount?: number }) => {
@@ -78,7 +112,32 @@ export default function TemplatesPage() {
   // Estado de edição inline do nome
   const [editingProjectId, setEditingProjectId] = React.useState<string | null>(null);
   const [editingTitle, setEditingTitle] = React.useState('');
+  const [isSyncingProjects, setIsSyncingProjects] = React.useState(false);
   const leadFormsController = useLeadFormsController()
+
+  // Sincroniza todos os projetos com a Meta
+  const handleSyncProjects = async () => {
+    if (!projects || projects.length === 0) return;
+
+    setIsSyncingProjects(true);
+    try {
+      // Sincroniza todos os projetos em paralelo
+      const promises = projects.map(project =>
+        fetch(`/api/template-projects/${project.id}/sync`, { method: 'POST' })
+      );
+
+      await Promise.allSettled(promises);
+
+      // Atualiza a lista
+      refetch();
+      toast.success('Projetos sincronizados com a Meta');
+    } catch (error) {
+      console.error('Sync error:', error);
+      toast.error('Erro ao sincronizar projetos');
+    } finally {
+      setIsSyncingProjects(false);
+    }
+  };
 
   const handleCreateManualTemplate = async () => {
     const now = new Date()
@@ -218,10 +277,21 @@ export default function TemplatesPage() {
           )}
 
           {activeTab === 'projects' && (
-            <Button variant="brand" onClick={() => router.push('/templates/new')}>
-              <Plus className="w-4 h-4" />
-              Novo Projeto
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="brand" onClick={() => router.push('/templates/new')}>
+                <Plus className="w-4 h-4" />
+                Novo Projeto
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={handleSyncProjects}
+                disabled={isSyncingProjects || isLoadingProjects}
+              >
+                <RefreshCw className={cn('w-4 h-4', isSyncingProjects && 'animate-spin')} />
+                {isSyncingProjects ? 'Sincronizando...' : 'Sincronizar'}
+              </Button>
+            </div>
           )}
 
           {activeTab === 'flows' && (
@@ -383,6 +453,7 @@ export default function TemplatesPage() {
                 <thead className="bg-[var(--ds-bg-elevated)] border-b border-[var(--ds-border-default)] text-[var(--ds-text-muted)] uppercase tracking-widest text-xs">
                   <tr>
                     <th className="px-6 py-4 font-medium">Nome</th>
+                    <th className="px-6 py-4 font-medium">Tipo</th>
                     <th className="px-6 py-4 font-medium">Status</th>
                     <th className="px-6 py-4 font-medium text-center">Templates</th>
                     <th className="px-6 py-4 font-medium">Progresso</th>
@@ -393,13 +464,13 @@ export default function TemplatesPage() {
                 <tbody className="divide-y divide-[var(--ds-border-subtle)]">
                   {isLoadingProjects ? (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center">
+                      <td colSpan={7} className="px-6 py-12 text-center">
                         <Loader2 className="w-6 h-6 animate-spin text-emerald-500 mx-auto" />
                       </td>
                     </tr>
                   ) : filteredProjects.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-[var(--ds-text-muted)]">
+                      <td colSpan={7} className="px-6 py-12 text-center text-[var(--ds-text-muted)]">
                         Nenhum projeto encontrado.
                       </td>
                     </tr>
@@ -457,6 +528,9 @@ export default function TemplatesPage() {
                                 </div>
                               )}
                             </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <StrategyBadge strategy={project.strategy} />
                           </td>
                           <td className="px-6 py-4">
                             <StatusBadge

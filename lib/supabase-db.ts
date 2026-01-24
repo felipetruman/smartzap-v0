@@ -1824,6 +1824,8 @@ export const templateProjectDb = {
                 status: dto.status || 'draft',
                 // Discriminador para separar Manual vs IA (default seguro)
                 source: (dto as any).source || 'ai',
+                // Estratégia usada: marketing, utility, bypass
+                strategy: dto.strategy || 'utility',
                 template_count: dto.items.length,
                 approved_count: 0
                 // user_id is explicitly NOT set here, relying on schema default (null) or logic in API route if needed

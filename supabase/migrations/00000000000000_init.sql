@@ -709,7 +709,8 @@ CREATE TABLE public.template_projects (
     approved_count integer DEFAULT 0,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone,
-    source text DEFAULT 'ai'::text
+    source text DEFAULT 'ai'::text,
+    strategy text DEFAULT 'utility'::text
 );
 
 CREATE TABLE public.templates (

@@ -291,6 +291,7 @@ export default function NewTemplateProjectPage() {
                 title: projectTitle.trim(),
                 prompt: prompt,
                 status: 'draft',
+                strategy: strategy || 'utility',  // Salva a estratégia escolhida
                 items: selected.map(t => ({
                     name: t.name,
                     content: t.content,
