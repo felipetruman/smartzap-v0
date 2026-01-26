@@ -7,10 +7,6 @@ import { DevModeProvider } from '@/components/providers/DevModeProvider'
 import { PWAProvider } from '@/components/pwa'
 import { useState } from 'react'
 
-// Desabilitar Realtime se não precisar de atualizações em tempo real
-// Isso evita erros de WebSocket quando o Supabase Realtime não está configurado
-const ENABLE_REALTIME = false
-
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
     () =>
@@ -38,17 +34,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
     >
       <QueryClientProvider client={queryClient}>
         <DevModeProvider>
-          {ENABLE_REALTIME ? (
-            <CentralizedRealtimeProvider>
-              <PWAProvider>
-                {children}
-              </PWAProvider>
-            </CentralizedRealtimeProvider>
-          ) : (
+          <CentralizedRealtimeProvider>
             <PWAProvider>
               {children}
             </PWAProvider>
-          )}
+          </CentralizedRealtimeProvider>
         </DevModeProvider>
       </QueryClientProvider>
     </ThemeProvider>

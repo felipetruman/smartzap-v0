@@ -159,11 +159,15 @@ export function CentralizedRealtimeProvider({
     })
 
     // Activate channel
+    let hasLoggedError = false
     channel.subscribe((status) => {
       isConnectedRef.current = status === 'SUBSCRIBED'
       if (status === 'SUBSCRIBED') {
-      } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-        console.warn('[CentralizedRealtime] Channel status:', status)
+        hasLoggedError = false // Reset para logar novamente se reconectar e falhar depois
+      } else if ((status === 'CLOSED' || status === 'CHANNEL_ERROR') && !hasLoggedError) {
+        // Loga apenas uma vez para não poluir o console
+        console.warn('[Realtime] Conexão falhou. Tentando reconectar automaticamente...')
+        hasLoggedError = true
       }
     })
 
