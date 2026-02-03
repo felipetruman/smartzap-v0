@@ -102,12 +102,9 @@ export async function handleInboundMessage(
   const normalizedPhone = normalizePhoneNumber(payload.from)
   const supabase = getSupabaseAdmin()
 
-  // TEMPORÁRIO: RPC process_inbound_message com erro 42804 (COALESCE types text and uuid)
-  // Forçando uso do fallback até corrigir a RPC no banco
-  const USE_RPC = false
-
   // Tenta usar RPC otimizada (V2)
-  if (USE_RPC && supabase) {
+  // Fix aplicado em 20260203000000_fix_process_inbound_message_types.sql
+  if (supabase) {
     try {
       const { data, error } = await supabase.rpc('process_inbound_message', {
         p_phone: normalizedPhone,
