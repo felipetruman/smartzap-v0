@@ -277,12 +277,13 @@ async function handleInboundMessageLegacy(
  */
 async function triggerAIProcessing(
   conversation: InboxConversation,
-  _message: InboxMessage
+  message: InboxMessage
 ): Promise<boolean> {
   const conversationId = conversation.id
+  const messageId = message.whatsapp_message_id // Usado para deduplicação
   const now = Date.now()
 
-  console.log(`🔥 [TRIGGER] Starting AI processing for ${conversationId}`)
+  console.log(`🔥 [TRIGGER] Starting AI processing for ${conversationId}, messageId=${messageId}`)
 
   const qstash = getQStashClient()
 
@@ -301,7 +302,7 @@ async function triggerAIProcessing(
   // 2. Se debounce desabilitado (0), dispara imediatamente
   if (debounceMs === 0) {
     console.log(`🔥 [TRIGGER] Debounce disabled, dispatching immediately`)
-    return await dispatchToQStash(conversationId, debounceMs, 0)
+    return await dispatchToQStash(conversationId, debounceMs, 0, messageId)
   }
 
   // 3. Atualiza timestamp da ÚLTIMA MENSAGEM no Redis (isso é o "reset" do timer)
@@ -315,16 +316,21 @@ async function triggerAIProcessing(
   }
 
   // 4. Agenda job com delay - quando executar, vai verificar se passou tempo suficiente
-  return await dispatchToQStash(conversationId, debounceMs, debounceSeconds)
+  return await dispatchToQStash(conversationId, debounceMs, debounceSeconds, messageId)
 }
 
 /**
  * Helper: Dispara job para QStash com delay opcional
+ *
+ * DEDUPLICAÇÃO (2026-02-03):
+ * - Usa messageId como deduplicationId no QStash
+ * - Evita reprocessamento em caso de retry automático do QStash
  */
 async function dispatchToQStash(
   conversationId: string,
   debounceMs: number,
-  delaySeconds: number
+  delaySeconds: number,
+  messageId?: string | null
 ): Promise<boolean> {
   const qstash = getQStashClient()
   if (!qstash) return false
@@ -339,7 +345,7 @@ async function dispatchToQStash(
 
   const aiRespondUrl = `${baseUrl}/api/ai/respond`
 
-  console.log(`🔥 [TRIGGER] Dispatching to ${aiRespondUrl} with delay=${delaySeconds}s`)
+  console.log(`🔥 [TRIGGER] Dispatching to ${aiRespondUrl} with delay=${delaySeconds}s, messageId=${messageId}`)
 
   try {
     // Headers para autenticação e bypass
@@ -362,13 +368,16 @@ async function dispatchToQStash(
 
     await qstash.publishJSON({
       url: aiRespondUrl,
-      body: { conversationId, debounceMs },
+      body: { conversationId, debounceMs, messageId },
       delay: delaySeconds > 0 ? delaySeconds : undefined,
       retries: 2,
       headers,
+      // DEDUPLICAÇÃO: QStash ignora mensagens com mesmo deduplicationId
+      // Janela de 1 hora - evita retry duplicado
+      ...(messageId && { deduplicationId: `ai:respond:${messageId}` }),
     })
 
-    console.log(`✅ [TRIGGER] AI scheduled: delay=${delaySeconds}s, debounceMs=${debounceMs}`)
+    console.log(`✅ [TRIGGER] AI scheduled: delay=${delaySeconds}s, debounceMs=${debounceMs}, dedup=${messageId ? 'enabled' : 'disabled'}`)
     return true
   } catch (error) {
     console.error('❌ [TRIGGER] Failed to dispatch AI processing:', error)

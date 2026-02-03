@@ -33,6 +33,8 @@ interface AIRespondRequest {
   conversationId: string
   /** Tempo de debounce configurado no agente (para verificação de "parou de digitar") */
   debounceMs?: number
+  /** ID da mensagem WhatsApp que disparou o processamento (para deduplicação) */
+  messageId?: string
 }
 
 // =============================================================================
@@ -48,14 +50,36 @@ export async function POST(req: NextRequest) {
   try {
     // 1. Parse request
     const body = (await req.json()) as AIRespondRequest
-    const { conversationId, debounceMs } = body
+    const { conversationId, debounceMs, messageId } = body
 
     if (!conversationId) {
       console.log(`❌ [AI-RESPOND] Missing conversationId`)
       return NextResponse.json({ error: 'Missing conversationId' }, { status: 400 })
     }
 
-    console.log(`🤖 [AI-RESPOND] Processing conversation: ${conversationId}, debounceMs: ${debounceMs}`)
+    console.log(`🤖 [AI-RESPOND] Processing conversation: ${conversationId}, debounceMs: ${debounceMs}, messageId: ${messageId}`)
+
+    // 1.2. DEDUPLICAÇÃO: Verifica se essa mensagem já foi processada
+    // Última linha de defesa contra duplicatas (QStash retry, race conditions, etc.)
+    if (messageId && redis) {
+      const dedupKey = `ai:processed:${messageId}`
+      const alreadyProcessed = await redis.get(dedupKey)
+
+      if (alreadyProcessed) {
+        console.log(`⏭️ [AI-RESPOND] Duplicate detected - message ${messageId} already processed at ${alreadyProcessed}`)
+        return NextResponse.json({
+          success: true,
+          deduplicated: true,
+          messageId,
+          reason: 'already-processed',
+        })
+      }
+
+      // Marca como "processando" ANTES de iniciar (evita race condition)
+      // TTL de 30 minutos - tempo suficiente para qualquer processamento
+      await redis.setex(dedupKey, 1800, new Date().toISOString())
+      console.log(`🔒 [AI-RESPOND] Dedup lock acquired for message ${messageId}`)
+    }
 
     // 1.5. Verificação de debounce - usuário parou de digitar?
     // Verifica se passou tempo suficiente desde a ÚLTIMA MENSAGEM

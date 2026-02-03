@@ -55,6 +55,10 @@ yarn-debug.log*
 .auto-claude/
 .devtools
 
+# Security audit evidence (sensitive - contains architecture details)
+.sb-pentest-evidence/
+.sb-pentest-context.json
+
 # GitHub AI configs (dev-only)
 .github/agents/
 .github/prompts/
@@ -95,8 +99,9 @@ test-results/
 playwright-report/
 coverage/
 .nyc_output/
-tests/stress/reports/*
-!tests/stress/reports/.gitkeep
+
+# Testes (mantidos apenas localmente - repo público)
+tests/
 
 # Legacy (can be removed)
 # vite.config.ts
